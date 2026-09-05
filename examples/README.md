@@ -34,10 +34,13 @@ python examples/plot_atmosphere.py
 
 ## 文件
 
+新增：[XZ 与 YZ 的 3×2 轨迹对照图](trajectories_xz_yz.md)，包含无底部图例的图片和复现命令。
+
 | 文件 | 用途 |
 |---|---|
 | [sphere_trajectories.jl](sphere_trajectories.jl) | 轨迹积分和边界终止 |
 | [plot_sphere_trajectories.py](plot_sphere_trajectories.py) | 全部、向阳面和背阳面轨迹三个面板 |
+| [plot_trajectories_xz_yz.py](plot_trajectories_xz_yz.py) | 全部、向阳面、背阳面的 XZ/YZ 六个面板 |
 | [hemisphere_work.jl](hemisphere_work.jl) | 逐粒子做功分析和能量闭合检查 |
 | [plot_hemisphere_work.py](plot_hemisphere_work.py) | 日夜两侧、三个电场分量的 2×3 面板 |
 
