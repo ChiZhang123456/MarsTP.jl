@@ -4,6 +4,12 @@ Clean Mars test-particle tracing package for O2+ work with MHD fields, prepared
 source rates, GITM neutral temperature, and detector velocity-distribution
 analysis.
 
+## Reproducible figure examples
+
+See [examples/README.md](examples/README.md) for the 800 km O2+ trajectory panels
+and the dayside/nightside electric-work maps, including Julia/Python source,
+the two PNG figures, prerequisites, run commands, and interpretation notes.
+
 ## Data
 
 Required runtime inputs live in `data/`:
