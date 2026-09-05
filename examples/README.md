@@ -30,11 +30,11 @@ python examples/plot_atmosphere.py
 ## 800 km O₂⁺ 轨迹与电场做功
 
 
-这两个示例使用相同的球面随机释放方向，展示 1000 个初始静止 O₂⁺ 的三维轨迹在 XZ 平面的投影，以及各电场分量沿轨迹的累计做功。Julia 负责积分和做功分析，Python 使用 `py_space_zc.maven.bs_mpb`、`plot_mars` 和 Matplotlib 绘图。
+这两个示例使用相同的球面随机释放方向，模拟 1000 个初始静止 O₂⁺。图 1 用无图例的 3×2 六面板展示轨迹的 XZ 和 YZ 投影，图 2 在 XZ 投影上展示各电场分量沿轨迹的累计做功。Julia 负责积分和做功分析，Python 使用 `py_space_zc.maven.bs_mpb`、`plot_mars` 和 Matplotlib 绘图。
 
 ## 文件
 
-新增：[XZ 与 YZ 的 3×2 轨迹对照图](trajectories_xz_yz.md)，包含无底部图例的图片和复现命令。
+图 1 的详细说明与复现命令见 [XZ 与 YZ 的 3×2 轨迹对照图](trajectories_xz_yz.md)。
 
 | 文件 | 用途 |
 |---|---|
@@ -44,7 +44,7 @@ python examples/plot_atmosphere.py
 | [hemisphere_work.jl](hemisphere_work.jl) | 逐粒子做功分析和能量闭合检查 |
 | [plot_hemisphere_work.py](plot_hemisphere_work.py) | 日夜两侧、三个电场分量的 2×3 面板 |
 
-两个 Python 入口会调用本目录中的 Julia 文件，不依赖仓库 `scripts/` 目录。轨迹通过标准输出传入 Python 内存，不保存轨迹数据文件；仅保存 PNG 图片。每次重新绘图会重新积分。
+图 1 和图 2 的 Python 入口分别为 `plot_trajectories_xz_yz.py` 和 `plot_hemisphere_work.py`，均调用本目录中的 Julia 文件，不依赖仓库 `scripts/` 目录。轨迹通过标准输出传入 Python 内存，不保存轨迹数据文件；仅保存 PNG 图片。每次重新绘图会重新积分。
 
 ## 初始条件和边界
 
@@ -62,7 +62,7 @@ python examples/plot_atmosphere.py
 | 积分 | TestParticle Boris，基准步长 0.1 s，4 个 Julia 线程 |
 | 场 | 静态 `E_Total [V/m]` 和 `B_Field [T]` |
 
-这些示例采用非相对论洛伦兹力模型，不包含碰撞、重力、化学生成权重或粒子反馈。BS 和 MPB 是 `py_space_zc` 画出的参考曲线，不是积分终止边界。所有 Y 位置都投影到同一 XZ 图上，轨迹投影进入火星圆盘不代表实际粒子进入火星。
+这些示例采用非相对论洛伦兹力模型，不包含碰撞、重力、化学生成权重或粒子反馈。XZ 面板中的 BS 和 MPB 是 `py_space_zc` 画出的参考曲线，不是积分终止边界。XZ 投影包含所有 Y 位置，YZ 投影包含所有 X 位置，均为完整三维轨迹的投影；轨迹投影进入火星圆盘不代表实际粒子进入火星。
 
 ## 环境与输入数据
 
@@ -94,11 +94,15 @@ python examples/plot_hemisphere_work.py
 
 轨迹示例还支持 `RELEASE_ALTITUDE_KM`、`PARTICLE_COUNT`、`TRACE_DT` 和 `TRACE_LIMIT` 环境变量，默认分别为 800、1000、0.1、20000。做功示例固定为本文的 800 km、1000 粒子配置，以确保与图片对应。做功绘图入口会设置 `WORK_HEMISPHERE=all`，Julia 单独运行时默认只分析向阳面。
 
-## 图 1：全部、向阳面与背阳面轨迹
+## 图 1：无图例的 XZ/YZ 六面板轨迹
 
-![800 km O2+ trajectories in XZ and YZ](images/trajectories_xz_yz_800km.png)
+![800 km O₂⁺ 轨迹，三行依次为全部、向阳面和背阳面，左列 XZ，右列 YZ，无图例](images/trajectories_xz_yz_800km.png)
 
-六个面板的坐标尺度相同，第一列 XZ，第二列 YZ，三行依次为全部、向阳面和背阳面粒子。分组依据**起始位置**：向阳面为 `X0 > 0`，背阳面为 `X0 <= 0`。蓝色表示到达外边界，橙色表示返回内边界。图片不显示底部图例，详见 [XZ/YZ 说明](trajectories_xz_yz.md)。
+图按 **3 行、2 列**排列，第一列为 XZ 投影，第二列为 YZ 投影。第一行为全部粒子（`All O2+`），第二行为向阳面粒子（`Dayside O2+`），第三行为背阳面粒子（`Nightside O2+`）。六个面板使用相同坐标尺度和等比例坐标轴，位置以火星半径 `Rm = 3390 km` 归一化。图中不显示主标题、底部图例或底部说明文字。
+
+分组依据**起始位置**：向阳面为 `X0 > 0`，背阳面为 `X0 <= 0`。每行两列显示同一批粒子的完整轨迹，粒子随后跨过日夜分界面不会改变所属分组。蓝色表示到达外边界，橙色表示返回内边界；深色小点表示释放位置，细灰圆表示 800 km 释放球面的投影轮廓。
+
+XZ 列绘制火星贴图、BS 虚线和 MPB 点线；YZ 列绘制火星几何圆盘，不绘制 BS/MPB 参考曲线。绘图代码见 [plot_trajectories_xz_yz.py](plot_trajectories_xz_yz.py)，完整说明见 [XZ/YZ 说明](trajectories_xz_yz.md)。
 
 | 分组 | 到达外边界 | 返回内边界 |
 |---|---:|---:|
