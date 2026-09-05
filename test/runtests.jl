@@ -9,7 +9,8 @@ using MarsTP, StaticArrays, Test
     @test w.conv_eV ≈ 6
     @test w.hall_eV ≈ -3
     @test field_work((; u = [traj]), fields) == w
-    p = field_work_profile(traj, fields)
+    @test field_work_profile === Electric_field_work_profile
+    p = Electric_field_work_profile(traj, fields)
     @test p.total_eV ≈ [0, 3]
     @test p.conv_eV ≈ [0, 6]
     @test p.hall_eV ≈ [0, -3]
@@ -19,10 +20,10 @@ using MarsTP, StaticArrays, Test
     @test p.field_sum_residual_eV ≈ [0, 0] atol=1e-12
     reverse_traj = (; t = reverse(traj.t), u = reverse(traj.u))
     @test field_work(reverse_traj, fields).total_eV ≈ -3
-    @test field_work_profile(reverse_traj, fields).total_eV ≈ [0, -3]
+    @test Electric_field_work_profile(reverse_traj, fields).total_eV ≈ [0, -3]
     single = (; t = [0.], u = [traj.u[1]])
     @test field_work(single, fields).total_eV == 0
-    @test field_work_profile(single, fields).total_eV == [0]
+    @test Electric_field_work_profile(single, fields).total_eV == [0]
     @test_throws ArgumentError field_work((; u=[traj,traj]),fields)
     expected = [w,w]
     @test particle_field_work([traj,traj],fields) == expected
@@ -38,7 +39,7 @@ using MarsTP, StaticArrays, Test
     @test_throws ArgumentError field_work((;t=[0.],u=[SA[0.,0.,0.,NaN,0.,0.]]),fields)
     invalid = MarsTP.FieldWorkInterpolators(_ -> SA[NaN,0.,0.], fields.conv, fields.hall)
     @test_throws ErrorException field_work(traj,invalid)
-    @test_throws ErrorException field_work_profile(traj,invalid)
+    @test_throws ErrorException Electric_field_work_profile(traj,invalid)
 end
 
 @testset "Uniform electric acceleration: energy closure" begin
@@ -49,7 +50,7 @@ end
     u = [SA[0.5acceleration*s^2, 2., 0., acceleration*s, 0., 0.] for s in t]
     fields = MarsTP.FieldWorkInterpolators(_ -> SA[efield,0.,0.],
         _ -> SA[0.8efield,0.,0.], _ -> SA[0.2efield,0.,0.])
-    p = field_work_profile((;t,u),fields)
+    p = Electric_field_work_profile((;t,u),fields)
     @test p.total_eV ≈ p.delta_kinetic_eV
     @test p.conv_eV ≈ 0.8p.total_eV
     @test p.hall_eV ≈ 0.2p.total_eV

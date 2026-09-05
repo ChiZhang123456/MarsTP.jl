@@ -116,11 +116,11 @@ XZ 列绘制火星贴图、BS 虚线和 MPB 点线；YZ 列绘制火星几何圆
 
 ![Dayside and nightside electric work](images/electric_work_800km.png)
 
-第一行向阳面，第二行背阳面；三列依次是对流电场、Hall 电场和总电场做功。调用核心函数 `field_work_profile(sol, itp)`，对同一条由总电场驱动的轨迹计算：
+第一行向阳面，第二行背阳面；三列依次是对流电场、Hall 电场和总电场做功。调用核心函数 `Electric_field_work_profile(sol, itp)`，对同一条由总电场驱动的轨迹计算：
 
 $$W_i(t)=q\int_{t_0}^{t}\mathbf{E}_i[\mathbf{x}(t')]\cdot\mathbf{v}(t')\,dt'.$$
 
-颜色表示从释放时刻到当前位置的**累计带符号做功**，不是该位置的瞬时功率。红色表示净增能，蓝色表示净减能，单位 keV。第三列直接积分 `E_Total`，不是用动能替代。`field_work_profile` 也返回瞬时功率和能量闭合残差，详见根目录 README 和函数 docstring。
+颜色表示从释放时刻到当前位置的**累计带符号做功**，不是该位置的瞬时功率。红色表示净增能，蓝色表示净减能，单位 keV。第三列直接积分 `E_Total`，不是用动能替代。`Electric_field_work_profile` 也返回瞬时功率和能量闭合残差，详见根目录 README 和函数 docstring。
 
 每行三列共用一套对称对数色标，线性区阈值为 0.1 keV。上下两行独立取各自所有分量的最大绝对累计做功作为 clim：本次向阳面约 ±17.5032 keV，背阳面约 ±17.3483 keV。因此跨行比较时要同时读取色标。
 

@@ -54,7 +54,7 @@ trajectories (Cartesian positions in m, velocities in m/s, times in s):
 ```julia
 itp = build_field_work_interpolators()
 summary = field_work(sol, itp; species = "O2+")
-profile = field_work_profile(sol, itp; species = "O2+")
+profile = Electric_field_work_profile(sol, itp; species = "O2+")
 # profile.t, profile.conv_eV, profile.hall_eV, profile.total_eV
 # profile.delta_kinetic_eV, profile.energy_residual_eV
 # profile.power_conv_eV_s, profile.power_hall_eV_s
@@ -83,17 +83,21 @@ Run the focused tests without the MHD input file:
 julia --threads=2 --project=. test/runtests.jl
 ```
 
-`scripts/dayside_work.jl` demonstrates `field_work_profile` on the 500 dayside
-members of a reproducible 1000-particle, 800 km O2+ shell release. It uses four
-threads when launched by `scripts/plot_dayside_work.py`, starts at rest, and stops
+The former name `field_work_profile` remains available as a compatibility alias for
+`Electric_field_work_profile`, with identical arguments and return values.
+
+`examples/hemisphere_work.jl` demonstrates `Electric_field_work_profile` on a
+reproducible 1000-particle, 800 km O2+ shell release. It uses four
+threads when launched by `examples/plot_hemisphere_work.py`, starts at rest, and stops
 at the 200 km or 4 Mars-radius boundary (20,000 s guard). Work ends at the last
 valid in-domain state. Energy closure above 0.1% triggers timestep refinement;
 this is a diagnostic, not a guarantee of full trajectory convergence.
 
 The Python script requires NumPy, Matplotlib and the user's `py_space_zc` library.
-Set `DAYSIDE_WORK_PREVIEW` to an output PNG path before running it. It plots two
-XZ trajectory panels colored by cumulative signed work on a shared symmetric-log
-scale, plus a per-particle final-work scatter plot. Only the preview image is
+Set `HEMISPHERE_WORK_PREVIEW` to customize the output PNG path. It plots six
+XZ panels with dayside and nightside particles in separate rows and convection,
+Hall and total work in three columns. Each row uses its own symmetric-log color
+scale. See [the example documentation](examples/README.md). Only the preview image is
 saved; trajectory data pass through memory. Threaded output is not ordered, so
 each record carries its original particle ID.
 

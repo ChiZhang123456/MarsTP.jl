@@ -87,7 +87,7 @@ function field_work(sol, itp::FieldWorkInterpolators; species = "O2+")
 end
 
 """
-    field_work_profile(sol, itp; species="O2+")
+    Electric_field_work_profile(sol, itp; species="O2+")
 
 Return time-resolved signed work and instantaneous power on the same trajectory.
 `total_eV`, `conv_eV`, `hall_eV` are cumulative work, starting at zero.
@@ -99,7 +99,7 @@ whether total work equals convection plus Hall work. Totals are in `summary`.
 Invalid fields/states raise an error instead of silently contributing zero.
 Coarse saved trajectories can underestimate work; check saving cadence and dt.
 """
-function field_work_profile(sol, itp::FieldWorkInterpolators; species = "O2+")
+function Electric_field_work_profile(sol, itp::FieldWorkInterpolators; species = "O2+")
     traj = _work_trajectory(sol)
     sp = TP.SpeciesDict[species]
     n = length(traj.t)
@@ -144,15 +144,15 @@ end
 Analyze every particle in a TestParticle ensemble or a vector of trajectories
 (including the vector of single-member ensembles returned by `trace_forward`).
 Returns results in input order, using `field_work` or, if `profiles=true`,
-`field_work_profile`. Build interpolators once and reuse them. Threaded mode
+`Electric_field_work_profile`. Build interpolators once and reuse them. Threaded mode
 requires thread-safe, read-only interpolators. No files are saved.
 """
 function particle_field_work(solutions, itp::FieldWorkInterpolators;
         species = "O2+", profiles = false, threaded = false)
     hasproperty(solutions, :t) &&
-        throw(ArgumentError("Use field_work or field_work_profile for a single trajectory"))
+        throw(ArgumentError("Use field_work or Electric_field_work_profile for a single trajectory"))
     trajectories = solutions isa AbstractVector ? solutions : solutions.u
-    analyze = profiles ? field_work_profile : field_work
+    analyze = profiles ? Electric_field_work_profile : field_work
     result = Vector{Any}(undef, length(trajectories))
     if threaded
         Threads.@threads for i in eachindex(trajectories)
@@ -165,3 +165,6 @@ function particle_field_work(solutions, itp::FieldWorkInterpolators;
     end
     return result
 end
+
+"""Compatibility alias for [`Electric_field_work_profile`](@ref)."""
+const field_work_profile = Electric_field_work_profile
