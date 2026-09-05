@@ -77,6 +77,20 @@ Run the focused tests without the MHD input file:
 julia --threads=2 --project=. test/runtests.jl
 ```
 
+`scripts/dayside_work.jl` demonstrates `field_work_profile` on the 500 dayside
+members of a reproducible 1000-particle, 800 km O2+ shell release. It uses four
+threads when launched by `scripts/plot_dayside_work.py`, starts at rest, and stops
+at the 200 km or 4 Mars-radius boundary (20,000 s guard). Work ends at the last
+valid in-domain state. Energy closure above 0.1% triggers timestep refinement;
+this is a diagnostic, not a guarantee of full trajectory convergence.
+
+The Python script requires NumPy, Matplotlib and the user's `py_space_zc` library.
+Set `DAYSIDE_WORK_PREVIEW` to an output PNG path before running it. It plots two
+XZ trajectory panels colored by cumulative signed work on a shared symmetric-log
+scale, plus a per-particle final-work scatter plot. Only the preview image is
+saved; trajectory data pass through memory. Threaded output is not ordered, so
+each record carries its original particle ID.
+
 ## Perlmutter
 
 Use `scripts/perlmutter/run_backtrace_vdf.slurm` as the starting point. Copy or
