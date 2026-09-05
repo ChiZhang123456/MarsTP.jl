@@ -1,6 +1,6 @@
 # GITM and AMPS atmosphere example
 
-![Atmosphere profiles and maps](atmosphere_500km.png)
+![Atmosphere profiles and maps](atmosphere_gitm200km_amps500km.png)
 
 Run from any working directory with Python, NumPy, SciPy and Matplotlib installed:
 
@@ -16,9 +16,9 @@ Panels, in row order:
 
 1. Number density versus altitude at longitude = latitude = 0 degrees.
 2. GITM neutral temperature versus altitude at the same location.
-3. GITM CO2 density at 500 km.
-4. GITM O density at 500 km.
-5. GITM neutral temperature at 500 km.
+3. GITM CO2 density at 200 km.
+4. GITM O density at 200 km.
+5. GITM neutral temperature at 200 km.
 6. AMPS hot O density at 500 km.
 
 All maps use turbo with black labeled contours and independent colorbars.
@@ -40,8 +40,7 @@ T(h) = T0
 ```
 
 Species masses follow MarsTP: 15.999 and 44.01 times the proton mass.
-Dashed profile segments identify this extension. The 500 km GITM maps are
-extended model values, not native GITM output. This example does not change
+Dashed profile segments identify this extension. The three GITM maps are native 200 km slices, checked directly against the input arrays. The d panel uses nO, not nCO2 or nO_hot. Earlier 500 km example images remain available as historical extended-model figures. This example does not change
 the tracing library's `neutral_properties` implementation.
 
 AMPS provides hot O density only, with no temperature. Its 500 km slice is

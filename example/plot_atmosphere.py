@@ -2,7 +2,7 @@
 
 Figure contract: compare vertical and horizontal structure, without treating the
 hot-O population as GITM thermal O or inventing an AMPS temperature. Three-row, two-column
-quantitative grid at 500 km; PNG previews and editable PDF/SVG exports.
+quantitative grid with GITM at 200 km and AMPS at 500 km; PNG previews and editable PDF/SVG exports.
 """
 from pathlib import Path
 from datetime import datetime
@@ -96,9 +96,15 @@ map_data={}
 for ax,field,letter in zip(axes[1:].flat,['nCO2','nO','Tn','nO_hot'],'cdef'):
     d=data['amps' if field=='nO_hot' else 'gitm']
     lon,lat=np.meshgrid(d['longitude'].ravel(),d['latitude'].ravel())
-    z=evaluate(field,500e3,lat,lon)/(1 if field=='Tn' else 1e6)
+    map_height = 500 if field=='nO_hot' else 200
+    z=evaluate(field,map_height*1e3,lat,lon)/(1 if field=='Tn' else 1e6)
     assert np.isfinite(z).all() and (z>0).all(), field
     map_data[field]=z
+    qa[field]['map_altitude_km']=map_height
+    if field!='nO_hot':
+        native=d[field][np.flatnonzero(d['altitude'].ravel()==200e3)[0]]/(1 if field=='Tn' else 1e6)
+        np.testing.assert_allclose(z,native,rtol=1e-13)
+        qa[field]['native_200km_slice_verified']=True
     density=field!='Tn'
     norm=LogNorm(z.min(),z.max()) if density else Normalize(z.min(),z.max())
     mesh=ax.pcolormesh(lon,lat,z,shading='nearest',cmap='turbo',norm=norm,rasterized=True)
@@ -112,26 +118,26 @@ for ax,field,letter in zip(axes[1:].flat,['nCO2','nO','Tn','nO_hot'],'cdef'):
         fmt='%d'
     cs=ax.contour(lon,lat,z,levels=levels,colors='black',linewidths=.55,alpha=.8)
     ax.clabel(cs,inline=True,fontsize=7,fmt=fmt)
-    ax.set_title(f'{letter}  {labels[field]}',loc='left',fontweight='bold')
+    ax.set_title(f'{letter}  {labels[field]} ({map_height} km)',loc='left',fontweight='bold')
     ax.set(xlim=(0,360),ylim=(-90,90),xlabel='Longitude (°)',ylabel='Latitude (°)',
            xticks=[0,90,180,270,360],yticks=[-90,-45,0,45,90])
     cb=fig.colorbar(mesh,ax=ax,pad=.025,fraction=.045,aspect=24)
     cb.ax.tick_params(labelsize=8)
     cb.set_label(r'Density (cm$^{-3}$)' if density else 'Temperature (K)',fontsize=9)
-    qa[field]['map_500km_min_max']=[float(z.min()),float(z.max())]
-    qa[field]['map_500km_zero_count']=int(np.sum(z==0))
+    qa[field]['map_min_max']=[float(z.min()),float(z.max())]
+    qa[field]['map_zero_count']=int(np.sum(z==0))
 fig.suptitle('GITM and AMPS atmosphere',fontsize=15,fontweight='bold')
-fig.supxlabel('Maps: 500 km altitude; Mars radius: 3390 km. GITM above 220 km: exponential density extension,\n'
-              'constant temperature, no zero cutoff. Coordinates follow the input files.',fontsize=8)
+fig.supxlabel('Maps: GITM 200 km (native), AMPS 500 km; Mars radius: 3390 km. Profiles above 220 km:\n'
+              'GITM exponential density and constant temperature extension, no zero cutoff.',fontsize=8)
 for ext in ('png','pdf','svg'):
-    fig.savefig(OUT/f'atmosphere_500km.{ext}',dpi=300)
+    fig.savefig(OUT/f'atmosphere_gitm200km_amps500km.{ext}',dpi=300)
 plt.close(fig)
 np.savez_compressed(OUT/'atmosphere_source_data.npz',altitude_km=heights,
                     **{'profile_'+k:v for k,v in profiles.items()},
-                    **{'map500_'+k:v for k,v in map_data.items()},
+                    **{'map_'+k:v for k,v in map_data.items()},
                     gitm_latitude=data['gitm']['latitude'],gitm_longitude=data['gitm']['longitude'],
                     amps_latitude=data['amps']['latitude'],amps_longitude=data['amps']['longitude'])
-metadata={'radius_m':RM,'map_altitude_km':500,'zero_cutoff':False,
+metadata={'radius_m':RM,'map_altitude_km':{'gitm':200,'amps':500},'zero_cutoff':False,
           'extension':'n=n(219995 m)*exp(-(h-220000 m)/H); H=kB*T/(m*g); T=T(219995 m).',
           'mass_convention':'15.999 and 44.01 times proton mass, as in MarsTP',
           'gravity_m_s2':GRAV,'input_density_unit':'m^-3','plot_density_unit':'cm^-3',
