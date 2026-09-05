@@ -1,5 +1,11 @@
 # MarsTP 示例
 
+## 固定探头的 5000 粒子反向追踪
+
+从 `(0, 0, 2 Rm)` 对 5000 个 O₂⁺ 初始速度进行反向追踪，使用 turbo 配色及 `py_space_zc.maven.bs_mpb`、`plot_mars` 绘制 XZ 图。代码、条件、结果及复现命令见 [探头反向追踪示例](probe_backtrace.md)。
+
+![5000 粒子反向追踪](images/probe_backtrace_xz_5000.png)
+
 ## GITM 与 AMPS 大气剖面及分布图
 
 ![GITM 与 AMPS 大气剖面及分布图](atmosphere_gitm200km_amps500km.png)
