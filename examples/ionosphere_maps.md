@@ -48,6 +48,6 @@ PNG 已进行视觉检查；同列色标分别覆盖未屏蔽数据，不作百�
 
 ## 配套 backtracing 更新
 
-`BacktraceConfig(ionosphere_altitude_km=400.0)` 设置 200 至 800 km 的边界高度。边界使用 MHD 的 n、Ti、Ui 构造密度归一化漂移麦氏分布，输出 `f2d_volume`、`f2d_ionosphere` 及其和 `f2d_xz`。标量通量是诊断值，不再乘入边界 VDF。详见仓库 README 的 MHD ionosphere boundary 一节。
+`BacktraceConfig(ionosphere_altitude_km=400.0)` 设置一层可穿越的面源，内边界始终为 200 km。每次横穿贡献 `F*g/abs(v dot er)`，其中 `F=n*norm(Ui)`，`g` 为归一化 MHD 漂移麦氏分布。穿层后继续累计体积源。该模型取代此前电离层处终止的边界 VDF 模型。
 
-配套测试共 92 项通过，覆盖电场做功、非径向通量、边界分布、两种 Boris 积分方式及穿越边界时的速度同步。真实 MHD 单粒子测试得到非零电离层边界贡献；这不替代科学运行的步长收敛检查。
+通量和温度图本身不受输运模型调整影响。公式、单位、完整推导及模型限制见 [backtracing 推导](backtracing_derivation.md)。

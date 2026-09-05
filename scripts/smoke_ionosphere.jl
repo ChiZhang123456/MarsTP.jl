@@ -12,7 +12,9 @@ cfg=BacktraceConfig(detector_Rm=SA[1.12,0.,0.],ionosphere_altitude_km=400.,
     output_file=joinpath(mktempdir(project_path("outputs");cleanup=false),"ionosphere_smoke.jld2"))
 r=run_backtrace_vdf(cfg)
 @test sum(r.status_counts)==1
-@test r.status_counts[3]==1
+@test r.status_counts[2]==1 # crossed 400 km, continued to -2 s
+@test r.ionosphere_crossings[1]>=1
+@test r.model=="thin_shell_source_v1"
 @test r.f2d_ionosphere[1]>0
 @test r.f2d_xz ≈ r.f2d_volume+r.f2d_ionosphere
 @test all(isfinite,r.f2d_xz)

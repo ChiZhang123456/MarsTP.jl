@@ -106,55 +106,42 @@ each record carries its original particle ID.
 Use `scripts/perlmutter/run_backtrace_vdf.slurm` as the starting point. Copy or
 download the MHD `.vts` file into `data/` on Perlmutter before submitting.
 
-## MHD ionosphere boundary in backtracing
+## MHD ionosphere thin-sheet source in backtracing
 
-`BacktraceConfig` includes `ionosphere_altitude_km` (200 to 800 km, default
-200 km) and `include_ionosphere=true`. The detector must be strictly above the
-selected shell and below the outer field boundary:
+The source is a penetrable shell, **400 km by default**. The absorbing inner
+boundary is always **200 km**, independent of source altitude (allowed range:
+200 to 800 km). Backtracing continues below the shell and accumulates volume
+production until it reaches 200 km, the outer boundary, or the time limit.
 
 ```julia
 cfg = BacktraceConfig(ionosphere_altitude_km=400.0, dt=-0.05)
 result = run_backtrace_vdf(cfg)
 ```
 
-At the first backward entry into this shell, the boundary VDF uses MHD O2+
-density `n_O^2^p [m^-3]`, ion temperature `T_O^2^p [K]`, and Cartesian bulk
-velocity `U_O^2^p [m/s]` interpolated at that altitude and angular position:
-`f = n/(pi^(3/2)*vth^3)*exp(-sum(abs2,v-Ui)/vth^2)`, where
-`vth=sqrt(2*kB*Ti/m)`. No radial bulk-velocity clipping or hemisphere
-renormalization is applied. Crossing the source shell ends the trajectory.
-Raising the shell samples MHD moments at the new height, rather than rescaling
-a 200 km source map. Field-grid boundaries remain unchanged.
+MHD O2+ density, ion temperature and Cartesian bulk velocity define
+`F = n*norm(Ui)` in m^-2 s^-1 and a normalized drifting Maxwellian `g` in
+s^3 m^-3. Each transverse crossing adds `F*g/abs(dot(v,er))` in s^3 m^-6,
+where `v` is the traced particle velocity. All resolved crossings count, in
+either direction. The source shell does not terminate or scatter particles.
+This replaces the previous density-normalized boundary-VDF prescription.
 
-The scalar flux diagnostic is `n*norm(Ui)` in m^-2 s^-1. It is not a signed
-normal flux or a one-way thermal flux through the sphere. The density-normalized
-boundary VDF is added once, without a flux, timestep or surface-area multiplier.
+Volume production still uses the MAT volume rate and a zero-drift
+neutral-temperature Maxwellian. The saved `f2d_volume` and `f2d_ionosphere`
+are integrated over Vy in s^2 m^-5; `f2d_xz` is their sum.
+`ionosphere_crossings` counts sheet encounters per Vx/Vz cell across sampled Vy.
+`model="thin_shell_source_v1"` distinguishes these files from older results.
 
-```julia
-source = load_ionosphere_source(; altitude_km=400.0)
-properties = ionosphere_properties(source, SA[1.0, 0.0, 0.0])
-# Position specifies direction; sampling is on the configured shell.
-# properties.n, properties.Ti, properties.Ui, properties.flux
-boundary = ionosphere_distribution(source, SA[1.0, 0.0, 0.0], SA[1000., 0., 0.])
-# boundary.f: s^3 m^-6
-```
+`load_ionosphere_source`, `ionosphere_properties` and `ionosphere_distribution`
+expose the MHD shell moments. The last helper returns both normalized `g` and
+`f=n*g`; the transport source uses `flux*g`, not `flux*f`.
+`include_ionosphere=false` disables only the sheet source, retaining 200 km
+termination. Detectors below the source sheet are supported. Detectors exactly
+on the ideal sheet and unresolved grazing crossings raise errors; no arbitrary
+radial-speed floor is applied. A finite-thickness model would be required to
+regularize these cases.
 
-The original volume production model (MAT production density and a zero-drift
-neutral-temperature Maxwellian) remains outside the shell. `f2d_volume` and
-`f2d_ionosphere` separately store the Vy-integrated contributions; their sum is
-`f2d_xz`, all in s^2 m^-5. `include_ionosphere=false` disables the boundary VDF
-and uses the 200 km inner termination surface.
-
-Volume quadrature is trapezoidal at accepted step endpoints, including the
-fractional boundary segment. Boris staggered velocities are synchronized before
-VDF evaluation. Segment-sphere intersections stop before out-of-domain field
-evaluation. Invalid MHD moments or source samples raise an error rather than
-being replaced with zero. Nonfinite trajectories have a separate status.
-Status-count indices: 1 unused, 2 time limit, 3 inner/ionosphere shell,
-4 nonfinite trajectory, 5 outer boundary.
-
-`test/backtrace_ionosphere.jl` checks the Maxwellian peak, nonradial flux,
-allowed heights, both Boris solvers, straight-line crossings, fractional-step
-quadrature, outer exits and time limits. `scripts/smoke_ionosphere.jl` checks the
-local MHD input and a single-particle VDF. Step convergence must still be checked
-for each scientific detector/velocity-grid configuration.
+See the [full derivation and unit audit](examples/backtracing_derivation.md)
+for the transport equation, delta-function change of variables, volume
+quadrature, crossing treatment, unit table, background assumptions and limits.
+Run `julia --project=. test/runtests.jl` for analytic tests and
+`julia --project=. scripts/smoke_ionosphere.jl` for the local MHD smoke test.

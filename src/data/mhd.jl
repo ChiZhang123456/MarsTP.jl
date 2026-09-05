@@ -155,7 +155,7 @@ function _ionosphere_radius(altitude_km)
 end
 
 function load_ionosphere_source(path=data_path("mars_fields_spherical_from_dat.vts");
-        altitude_km=200.0)
+        altitude_km=400.0)
     radius = _ionosphere_radius(altitude_km)
     vtk = VTKFile(resolve_project_path(path))
     pd = get_point_data(vtk)
@@ -189,6 +189,6 @@ function ionosphere_distribution(source::IonosphereSource, position, velocity;
         mass=TP.SpeciesDict["O2+"].m)
     moments = ionosphere_properties(source, position)
     vth = sqrt(2 * TP.kB * moments.Ti / mass)
-    f = moments.n * VDF.Maxwellian(vth; u0=moments.Ui)(velocity)
-    return (; f, moments...)
+    g = VDF.Maxwellian(vth; u0=moments.Ui)(velocity)
+    return (; f=moments.n*g, g, moments...)
 end

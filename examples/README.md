@@ -1,5 +1,9 @@
 # MarsTP 示例
 
+## Backtracing 推导与单位
+
+[完整推导](backtracing_derivation.md)：400 km 可穿越薄层面源、固定 200 km 内边界、路径时间积分、面源穿越权重及三维 PSD / 二维 VDF 单位。
+
 ## MHD O₂⁺ 通量与离子温度分布
 
 200、400 km 的 MSO 经纬度分布，左列为 `n*norm(Ui)`，右列为离子温度。代码、输入要求、异常极点处理和复现命令见 [电离层通量与温度示例](ionosphere_maps.md)。
