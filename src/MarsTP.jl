@@ -21,6 +21,7 @@ export O2plusSourceRates, load_o2plus_source_rates, assert_same_grid
 export BacktraceConfig, run_backtrace_vdf, velocity_axes
 export ForwardTraceConfig, trace_forward
 export build_field_work_interpolators, field_work
+export field_work_profile, particle_field_work
 export plot_vx_vz, load_detector_vdf
 export o2plus_production_density
 
