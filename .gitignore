@@ -1,0 +1,13 @@
+.DS_Store
+output/
+logs/
+*.jld2
+*.png
+*.vts
+*.dat
+*.partial
+
+!data/amps_sph.mat
+!data/gitm_sph.mat
+!data/O2plus_source_rates.mat
+!data/README.md
