@@ -5,7 +5,7 @@
 Run from any working directory with Python, NumPy, SciPy and Matplotlib installed:
 
 ```sh
-python example/plot_atmosphere.py
+python examples/plot_atmosphere.py
 ```
 
 Arial must be available. Inputs are the tracked `data/gitm_sph.mat` and

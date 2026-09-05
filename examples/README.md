@@ -1,5 +1,7 @@
 # 800 km O₂⁺ 轨迹与电场做功示例
 
+其他示例：[GITM 与 AMPS 大气剖面及分布图](atmosphere.md)，运行入口为 `python examples/plot_atmosphere.py`。
+
 这两个示例使用相同的球面随机释放方向，展示 1000 个初始静止 O₂⁺ 的三维轨迹在 XZ 平面的投影，以及各电场分量沿轨迹的累计做功。Julia 负责积分和做功分析，Python 使用 `py_space_zc.maven.bs_mpb`、`plot_mars` 和 Matplotlib 绘图。
 
 ## 文件

@@ -13,4 +13,5 @@ logs/
 !data/README.md
 
 !examples/images/trajectories_800km.png
+!examples/atmosphere_gitm200km_amps500km.png
 !examples/images/electric_work_800km.png
