@@ -2,7 +2,7 @@
 
 Figure contract: compare vertical and horizontal structure, without treating the
 hot-O population as GITM thermal O or inventing an AMPS temperature. Three-row, two-column
-quantitative grid with GITM at 200 km and AMPS at 500 km; PNG previews and editable PDF/SVG exports.
+quantitative grid with GITM at 200 km and AMPS at 500 km; PNG output only.
 """
 from pathlib import Path
 from datetime import datetime
@@ -23,7 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = Path(__file__).resolve().parent
 OUT.mkdir(parents=True, exist_ok=True)
 mpl.rcParams.update({'font.family': 'Arial', 'font.size': 10,
-    'pdf.fonttype': 42, 'svg.fonttype': 'none', 'axes.spines.top': False,
+    'axes.spines.top': False,
     'axes.spines.right': False, 'legend.frameon': False})
 findfont('Arial', fallback_to_default=False)
 RM = 3390e3
@@ -129,8 +129,7 @@ for ax,field,letter in zip(axes[1:].flat,['nCO2','nO','Tn','nO_hot'],'cdef'):
 fig.suptitle('GITM and AMPS atmosphere',fontsize=15,fontweight='bold')
 fig.supxlabel('Maps: GITM 200 km (native), AMPS 500 km; Mars radius: 3390 km. Profiles above 220 km:\n'
               'GITM exponential density and constant temperature extension, no zero cutoff.',fontsize=8)
-for ext in ('png','pdf','svg'):
-    fig.savefig(OUT/f'atmosphere_gitm200km_amps500km.{ext}',dpi=300)
+fig.savefig(OUT/'atmosphere_gitm200km_amps500km.png',dpi=300)
 plt.close(fig)
 np.savez_compressed(OUT/'atmosphere_source_data.npz',altitude_km=heights,
                     **{'profile_'+k:v for k,v in profiles.items()},

@@ -10,7 +10,7 @@ python example/plot_atmosphere.py
 
 Arial must be available. Inputs are the tracked `data/gitm_sph.mat` and
 `data/amps_sph.mat`. Outputs are written beside the script (rerunning replaces
-these example outputs): PNG (300 dpi), PDF, SVG, source arrays and QA metadata.
+these example outputs): PNG (300 dpi), source arrays and QA metadata. Only the current PNG figure is tracked; no PDF or SVG is exported.
 
 Panels, in row order:
 
@@ -40,7 +40,7 @@ T(h) = T0
 ```
 
 Species masses follow MarsTP: 15.999 and 44.01 times the proton mass.
-Dashed profile segments identify this extension. The three GITM maps are native 200 km slices, checked directly against the input arrays. The d panel uses nO, not nCO2 or nO_hot. Earlier 500 km example images remain available as historical extended-model figures. This example does not change
+Dashed profile segments identify this extension. The three GITM maps are native 200 km slices, checked directly against the input arrays. The d panel uses nO, not nCO2 or nO_hot. This example does not change
 the tracing library's `neutral_properties` implementation.
 
 AMPS provides hot O density only, with no temperature. Its 500 km slice is
