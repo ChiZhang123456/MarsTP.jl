@@ -1,6 +1,34 @@
-# 800 km O₂⁺ 轨迹与电场做功示例
+# MarsTP 示例
 
-其他示例：[GITM 与 AMPS 大气剖面及分布图](atmosphere.md)，运行入口为 `python examples/plot_atmosphere.py`。
+## GITM 与 AMPS 大气剖面及分布图
+
+![GITM 与 AMPS 大气剖面及分布图](atmosphere_gitm200km_amps500km.png)
+
+该图使用 `data/gitm_sph.mat` 和 `data/amps_sph.mat`，展示 GITM 中性大气与 AMPS 热氧的高度剖面及经纬度分布。六个面板按从左到右、从上到下的顺序排列：
+
+| 面板 | 内容 |
+|---|---|
+| (a) | 经度和纬度均为 0° 处，GITM CO₂、O 和 AMPS 热 O 的数密度高度剖面 |
+| (b) | 同一位置的 GITM 中性温度高度剖面 |
+| (c) | 高度 200 km 处的 GITM CO₂ 数密度分布 |
+| (d) | 高度 200 km 处的 GITM O 数密度分布 |
+| (e) | 高度 200 km 处的 GITM 中性温度分布 |
+| (f) | 高度 500 km 处的 AMPS 热 O 数密度分布 |
+
+数密度单位为 cm⁻³，温度单位为 K；高度为离地高度，采用火星半径 3390 km。分布图采用独立色标和黑色标注等值线，数密度使用对数色标，温度使用线性色标。经纬度沿用输入数据定义。
+
+剖面显示 100 至 600 km。GITM 原始数据仅覆盖 100 至 220 km，220 km 以上的虚线为恒温、恒重力条件下的指数密度延伸，温度保持不变；绘图移除了原处方在 20 个标高处的密度截断。200 km 的 GITM 分布和 500 km 的 AMPS 分布均取自原始高度层。AMPS 仅提供热 O 数密度，不提供温度。
+
+在仓库根目录运行：
+
+```sh
+python examples/plot_atmosphere.py
+```
+
+需要 NumPy、SciPy、Matplotlib 和 Arial 字体。图片输出到本目录，重新运行会覆盖同名输出。完整方法、数据说明和检查项目见 [大气示例说明](atmosphere.md)。
+
+## 800 km O₂⁺ 轨迹与电场做功
+
 
 这两个示例使用相同的球面随机释放方向，展示 1000 个初始静止 O₂⁺ 的三维轨迹在 XZ 平面的投影，以及各电场分量沿轨迹的累计做功。Julia 负责积分和做功分析，Python 使用 `py_space_zc.maven.bs_mpb`、`plot_mars` 和 Matplotlib 绘图。
 
