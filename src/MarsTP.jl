@@ -18,6 +18,7 @@ export project_path, data_path, resolve_project_path
 export MHDFields, SpeciesMoments, load_mhd_fields, load_mhd_moments
 export load_gitm, load_amps, neutral_properties, hot_oxygen_density
 export O2plusSourceRates, load_o2plus_source_rates, assert_same_grid
+export IonosphereSource, load_ionosphere_source, ionosphere_properties, ionosphere_distribution
 export BacktraceConfig, run_backtrace_vdf, velocity_axes
 export ForwardTraceConfig, trace_forward
 export build_field_work_interpolators, field_work

@@ -139,3 +139,56 @@ function mhd_param(fields::MHDFields; species = "O2+")
         gridtype = TP.StructuredGrid,
     )
 end
+
+"""MHD O2+ scalar interpolators; velocity components remain Cartesian (m/s)."""
+struct IonosphereSource{N,T,U}
+    n::N
+    temperature::T
+    velocity::U
+    radius::Float64
+end
+
+function _ionosphere_radius(altitude_km)
+    isfinite(altitude_km) && 200 <= altitude_km <= 800 ||
+        throw(ArgumentError("ionosphere_altitude_km must be in [200, 800]"))
+    return Rm + 1e3 * altitude_km
+end
+
+function load_ionosphere_source(path=data_path("mars_fields_spherical_from_dat.vts");
+        altitude_km=200.0)
+    radius = _ionosphere_radius(altitude_km)
+    vtk = VTKFile(resolve_project_path(path))
+    pd = get_point_data(vtk)
+    nr, nt, np = ReadVTK.get_wholeextent(vtk.xml_file)[1]
+    r, theta, phi = _mhd_axes(nr, nt, np)
+    scalar(A) = TP.build_interpolator(TP.StructuredGrid, A, r, theta, phi)
+    n = _read_array(pd, "n_O^2^p [m^-3]", nr, nt, np)
+    T = _read_array(pd, "T_O^2^p [K]", nr, nt, np)
+    U = _read_array(pd, "U_O^2^p [m/s]", nr, nt, np)
+    # Scalar interpolation prevents the vector interpolator from interpreting
+    # these Cartesian components as spherical vector components.
+    return IonosphereSource(scalar(n), scalar(T),
+        ntuple(k -> scalar(Array(U[k, :, :, :])), 3), radius)
+end
+
+"""Sample n [m^-3], Ti [K], Ui [m/s], and n*norm(Ui) [m^-2 s^-1]."""
+function ionosphere_properties(source::IonosphereSource, position)
+    all(isfinite, position) && norm(position) > 0 ||
+        throw(ArgumentError("Expected a finite nonzero position"))
+    # Project onto the configured shell, with a nanometre-scale inward-grid
+    # offset only at the 200 km endpoint to avoid roundoff outside the table.
+    x = position / norm(position) * max(source.radius, Rinner + 1e-8)
+    n, Ti = source.n(x), source.temperature(x)
+    Ui = SVector{3,Float64}(ntuple(k -> source.velocity[k](x), 3))
+    isfinite(n) && n >= 0 && isfinite(Ti) && Ti > 0 && all(isfinite, Ui) ||
+        error("Invalid MHD O2+ moments at ionosphere position $x: n=$n, Ti=$Ti, Ui=$Ui")
+    return (; n, Ti, Ui, flux=n*norm(Ui))
+end
+
+function ionosphere_distribution(source::IonosphereSource, position, velocity;
+        mass=TP.SpeciesDict["O2+"].m)
+    moments = ionosphere_properties(source, position)
+    vth = sqrt(2 * TP.kB * moments.Ti / mass)
+    f = moments.n * VDF.Maxwellian(vth; u0=moments.Ui)(velocity)
+    return (; f, moments...)
+end

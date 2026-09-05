@@ -1,5 +1,11 @@
 # MarsTP 示例
 
+## MHD O₂⁺ 通量与离子温度分布
+
+200、400 km 的 MSO 经纬度分布，左列为 `n*norm(Ui)`，右列为离子温度。代码、输入要求、异常极点处理和复现命令见 [电离层通量与温度示例](ionosphere_maps.md)。
+
+![O₂⁺ 通量与温度](images/flux_Ti_200_400km.png)
+
 ## 固定探头的 5000 粒子反向追踪
 
 从 `(0, 0, 2 Rm)` 对 5000 个 O₂⁺ 初始速度进行反向追踪，使用 turbo 配色及 `py_space_zc.maven.bs_mpb`、`plot_mars` 绘制 XZ 图。代码、条件、结果及复现命令见 [探头反向追踪示例](probe_backtrace.md)。

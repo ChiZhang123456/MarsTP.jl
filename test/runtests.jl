@@ -56,3 +56,5 @@ end
     @test p.hall_eV ≈ 0.2p.total_eV
     @test maximum(abs,p.energy_residual_eV) < 1e-12
 end
+
+include("backtrace_ionosphere.jl")
