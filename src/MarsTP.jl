@@ -33,7 +33,7 @@ include("data/source_rates.jl")
 include("chemistry/reactions.jl")
 include("tracing/back_tracing.jl")
 include("tracing/forward_tracing.jl")
-include("analysis/field_work.jl")
+include("analysis/electric_field_work.jl")
 include("analysis/detector_vdf.jl")
 
 end
