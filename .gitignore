@@ -12,7 +12,6 @@ logs/
 !data/O2plus_source_rates.mat
 !data/README.md
 
-!examples/images/trajectories_800km.png
 !examples/atmosphere_gitm200km_amps500km.png
 !examples/images/electric_work_800km.png
 !examples/images/trajectories_xz_yz_800km.png

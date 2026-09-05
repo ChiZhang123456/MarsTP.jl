@@ -13,7 +13,7 @@ from matplotlib.lines import Line2D
 from py_space_zc.maven import bs_mpb, plot_mars
 
 ROOT = Path(__file__).resolve().parents[1]
-PREVIEW = Path(os.environ.get('TRAJECTORY_PREVIEW', ROOT / 'examples/images/trajectories_800km.png'))
+PREVIEW = Path(os.environ.get('TRAJECTORY_PREVIEW', ROOT / 'examples/images/trajectories_xz_legacy.png'))
 ALTITUDE = float(os.environ.get('RELEASE_ALTITUDE_KM', '800'))
 mpl.rcParams.update({'font.family': 'Arial', 'font.size': 11})
 process = subprocess.Popen(

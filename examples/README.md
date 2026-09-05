@@ -39,7 +39,7 @@ python examples/plot_atmosphere.py
 | 文件 | 用途 |
 |---|---|
 | [sphere_trajectories.jl](sphere_trajectories.jl) | 轨迹积分和边界终止 |
-| [plot_sphere_trajectories.py](plot_sphere_trajectories.py) | 全部、向阳面和背阳面轨迹三个面板 |
+| [plot_sphere_trajectories.py](plot_sphere_trajectories.py) | 可选的旧版 XZ 三面板绘图，输出 `trajectories_xz_legacy.png` |
 | [plot_trajectories_xz_yz.py](plot_trajectories_xz_yz.py) | 全部、向阳面、背阳面的 XZ/YZ 六个面板 |
 | [hemisphere_work.jl](hemisphere_work.jl) | 逐粒子做功分析和能量闭合检查 |
 | [plot_hemisphere_work.py](plot_hemisphere_work.py) | 日夜两侧、三个电场分量的 2×3 面板 |
@@ -79,7 +79,7 @@ python examples/plot_atmosphere.py
 在仓库根目录，用已配置 `py_space_zc` 的 Python 运行：
 
 ```sh
-python examples/plot_sphere_trajectories.py
+python examples/plot_trajectories_xz_yz.py
 python examples/plot_hemisphere_work.py
 ```
 
@@ -88,7 +88,7 @@ python examples/plot_hemisphere_work.py
 ```powershell
 $env:TRAJECTORY_PREVIEW = "$PWD/trajectory_preview.png"
 $env:HEMISPHERE_WORK_PREVIEW = "$PWD/work_preview.png"
-python examples/plot_sphere_trajectories.py
+python examples/plot_trajectories_xz_yz.py
 python examples/plot_hemisphere_work.py
 ```
 
@@ -96,9 +96,9 @@ python examples/plot_hemisphere_work.py
 
 ## 图 1：全部、向阳面与背阳面轨迹
 
-![800 km O2+ trajectories](images/trajectories_800km.png)
+![800 km O2+ trajectories in XZ and YZ](images/trajectories_xz_yz_800km.png)
 
-三个面板的坐标尺度相同，分组依据**起始位置**：向阳面为 `X0 > 0`，背阳面为 `X0 <= 0`。蓝色表示到达外边界，橙色表示返回内边界。
+六个面板的坐标尺度相同，第一列 XZ，第二列 YZ，三行依次为全部、向阳面和背阳面粒子。分组依据**起始位置**：向阳面为 `X0 > 0`，背阳面为 `X0 <= 0`。蓝色表示到达外边界，橙色表示返回内边界。图片不显示底部图例，详见 [XZ/YZ 说明](trajectories_xz_yz.md)。
 
 | 分组 | 到达外边界 | 返回内边界 |
 |---|---:|---:|
