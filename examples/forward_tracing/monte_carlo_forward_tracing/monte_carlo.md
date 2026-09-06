@@ -52,7 +52,47 @@ $$
 
 速度 bin 如果用 km/s，直接相除得到的是 m⁻³ (km/s)⁻³，其数值等于 SI PSD 数值乘以 $10^9$。建议计算时全部用 m/s，仅绘图坐标转 km/s。若密度也改用 cm⁻³，则 cm⁻³ (km/s)⁻³ 的数值为 SI PSD 数值乘以 $10^3$。对 Cartesian velocity bins 不需要额外的 $v^2$ 因子；球坐标速度网格才需要相应 Jacobian。
 
-## 3. 数值实现步骤
+## 3. 使用接口与数值实现
+
+`forward_psd` 接收 `trace_forward` 返回的结果，也支持 TestParticle ensemble、轨迹数组或单条含 `t` 和 `u` 的轨迹。示例：
+
+```julia
+using MarsTP
+
+# solutions = trace_forward(source.initial_states; config)
+# 每条轨迹必须与源采样时保存的粒子率权重一一对应。
+settings = (
+    detector_m = [-1.5Rm, 0.0, 1.0Rm], # 与轨迹相同的笛卡尔坐标系，m
+    side_m = 100e3,                     # 立方体边长，m
+    vlim = (-100.0, 100.0),             # 三个速度方向共用的边界
+    vgrid = 80,                        # 每个速度方向的 bin 数，不是步长
+    velocity_unit = :km_s,              # 仅指定输入 vlim 的单位
+    species = "O2+",
+    rate_weights_s = source.rate_weights_s, # particles/s，不能使用 density_weights_m3
+    coordinate_system = "MSO",         # 仅在实际轨迹采用 MSO 时这样设置
+)
+result3d = forward_psd(solutions; settings..., option="3D")
+result_xy = forward_psd(solutions; settings..., option="Vx-Vy")
+result_yz = forward_psd(solutions; settings..., option="Vy-Vz")
+result_xz = forward_psd(solutions; settings..., option="Vx-Vz")
+
+f_xyz = result3d.psd # 数组维度顺序为 (Vx, Vy, Vz)，单位 s^3 m^-6
+f_xz = result_xz.psd # 数组维度顺序为 (Vx, Vz)，单位 s^2 m^-5
+vx, vz = result_xz.velocity_centers_m_s # 始终返回 m/s
+n_covered = result3d.density_in_range_m3
+n_outside = result3d.density_outside_vlim_m3
+n_total = result3d.density_total_m3     # 包括速度范围外的贡献
+```
+
+`vlim=100.0` 表示对称边界 `(-100,100)`，也可以为三个轴分别设置边界，例如 `vlim=((-100,100),(-50,50),(-80,80))`。`vgrid=(80,40,64)` 设置各轴 bin 数。默认 `velocity_unit=:m_s`，输出始终为 SI。`option` 也接受 `:xyz`、`:xy`、`:yz`、`:xz`。
+
+二维结果在指定的第三轴速度范围内积分，与对应三维结果乘以该轴 bin 宽度后求和一致；若要恢复完整二维分布，须确保三个轴的速度范围足够宽。二维选项直接累计二维数组，不分配完整三维数组。
+
+粒子种类用于检查已有 TestParticle 轨迹的质量和电荷参数，并记录到结果中，不会重新计算轨迹。每次调用只处理同一物种。手动构造的 `t/u` 数据需由调用者保证物种和速度同步。当前 TestParticle 0.23.3 的 Boris 和 AdaptiveBoris 保存输出已经同步速度，不要再次做半步修正。
+
+结果还提供 `residence_s`、`outside_vlim_residence_s` 和 `retcodes`，分别记录每条轨迹的探头内总驻留时间、速度范围外驻留时间和原始求解器返回码。`Terminated` 仅保留其原始含义，不能据此区分撞击或逃逸；达到积分末时刻也不等于物理逃逸。失败返回码、非有限数据和不递增时间会报错。函数只统计保存时间段，不外推终止后的轨迹，也不保存文件。
+
+实现步骤：
 
 1. 设置探头中心、边长和三个速度轴的 bin edges，记录实际场文件的坐标系。所有单位先统一为 SI。
 2. 保留每条轨迹对应的 $Q_i$。位置和速度需要同步到同一时刻，Boris 半步速度不能未经同步直接用于速度 bin。
@@ -61,7 +101,7 @@ $$
 5. 对同时属于空间探头和速度 bin 的每个子段累加 `hist[b] += Q_i * dt_sub`。
 6. 最后计算 `f[b] = hist[b] / (L^3 * dvx[b_x] * dvy[b_y] * dvz[b_z])`。
 
-Julia 风格伪代码如下，`phase_space_segments` 是需要实现的几何及速度分箱步骤，不是当前包已有函数：
+以下伪代码概括统计过程，`phase_space_segments` 代表几何求交及速度分箱步骤，实际实现位于 `forward_psd` 内部：
 
 ```julia
 occupancy = zeros(length(vx_edges)-1, length(vy_edges)-1, length(vz_edges)-1)
@@ -118,5 +158,6 @@ $$
 上述粒子率驻留时间公式由稳态粒子数守恒推导。标准轨迹长度估计器采用权重乘体内轨迹长度并除以体积，见 [Geant4 官方 cell flux 说明](https://geant4.web.cern.ch/documentation/pipelines/master/bfad_html/ForApplicationDevelopers/Detector/hit.html)。本文统计的是数密度，沿路径使用 $dt=dl/|v|$，并加入速度 bin 指示函数；不能把 Geant4 的轨迹长度通量直接当作 PSD。
 
 - [源权重实现](../../../src/tracing/monte_carlo_weight.jl)
+- [探头 PSD 实现](../../../src/tracing/forward_psd.jl)
 - [源权重和单位说明](../monte_carlo_weights.md)
 - [MHD 源参数与 forward tracing 接口示例](../maxwellian_source.jl)

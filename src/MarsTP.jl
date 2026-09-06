@@ -22,6 +22,7 @@ export O2plusSourceRates, load_o2plus_source_rates, assert_same_grid
 export IonosphereSource, load_ionosphere_source, ionosphere_properties, ionosphere_distribution
 export BacktraceConfig, run_backtrace_vdf, velocity_axes
 export ForwardTraceConfig, trace_forward
+export forward_psd
 export MonteCarloWeight, thermal_speed_from_temperature_ev, maxwellian_importance_weight_3d
 export particle_density_weight, sample_maxwellian_source
 export build_field_work_interpolators, field_work
@@ -38,6 +39,7 @@ include("chemistry/reactions.jl")
 include("tracing/back_tracing.jl")
 include("tracing/forward_tracing.jl")
 include("tracing/monte_carlo_weight.jl")
+include("tracing/forward_psd.jl")
 include("analysis/electric_field_work.jl")
 include("analysis/detector_vdf.jl")
 

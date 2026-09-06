@@ -1,5 +1,6 @@
 using MarsTP, StaticArrays, Test
 include("monte_carlo_weight.jl")
+include("forward_psd.jl")
 
 @testset "Electric work: Cartesian frame and signed energy" begin
     fields = MarsTP.FieldWorkInterpolators(_ -> SA[1., 0., 0.],
