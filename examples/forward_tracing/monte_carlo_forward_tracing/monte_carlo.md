@@ -158,6 +158,6 @@ $$
 上述粒子率驻留时间公式由稳态粒子数守恒推导。标准轨迹长度估计器采用权重乘体内轨迹长度并除以体积，见 [Geant4 官方 cell flux 说明](https://geant4.web.cern.ch/documentation/pipelines/master/bfad_html/ForApplicationDevelopers/Detector/hit.html)。本文统计的是数密度，沿路径使用 $dt=dl/|v|$，并加入速度 bin 指示函数；不能把 Geant4 的轨迹长度通量直接当作 PSD。
 
 - [源权重实现](../../../src/tracing/monte_carlo_weight.jl)
-- [探头 PSD 实现](../../../src/tracing/forward_psd.jl)
+- [探头 PSD 实现](../../../src/tracing/detector_psd_forward.jl)
 - [源权重和单位说明](../monte_carlo_weights.md)
 - [MHD 源参数与 forward tracing 接口示例](../maxwellian_source.jl)

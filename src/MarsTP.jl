@@ -39,7 +39,7 @@ include("chemistry/reactions.jl")
 include("tracing/back_tracing.jl")
 include("tracing/forward_tracing.jl")
 include("tracing/monte_carlo_weight.jl")
-include("tracing/forward_psd.jl")
+include("tracing/detector_psd_forward.jl")
 include("analysis/electric_field_work.jl")
 include("analysis/detector_vdf.jl")
 
