@@ -1,4 +1,4 @@
-# Forward tracing：立方体探头的三维速度分布与相空间密度
+# Monte Carlo forward tracing：立方体探头的三维速度分布与相空间密度
 
 ## 1. 核心结果
 
@@ -20,8 +20,6 @@ $$
 dN=f(\mathbf x,\mathbf v)\,d^3x\,d^3v,
 \qquad n(\mathbf x)=\int f(\mathbf x,\mathbf v)\,d^3v.
 $$
-
-这不是动量空间分布函数 $f_p$。非相对论下 $\mathbf p=m\mathbf v$，两者满足 $f_v=m^3 f_p$。
 
 立方体边长 $L$ 用 m 表示，体积 $V_D=L^3$，单位 m³；三维笛卡尔速度 bin 体积为
 
@@ -119,8 +117,6 @@ $$
 
 上述粒子率驻留时间公式由稳态粒子数守恒推导。标准轨迹长度估计器采用权重乘体内轨迹长度并除以体积，见 [Geant4 官方 cell flux 说明](https://geant4.web.cern.ch/documentation/pipelines/master/bfad_html/ForApplicationDevelopers/Detector/hit.html)。本文统计的是数密度，沿路径使用 $dt=dl/|v|$，并加入速度 bin 指示函数；不能把 Geant4 的轨迹长度通量直接当作 PSD。
 
-- [源权重实现](../../src/tracing/monte_carlo_weight.jl)
-- [源权重和单位说明](monte_carlo_weights.md)
-- [MHD 源参数与 forward tracing 接口示例](maxwellian_source.jl)
-
-本文给出推导和实现规范，不表示 `trace_forward` 已自动输出上述 histogram，也不表示完整的探头 PSD 模拟已经验证。
+- [源权重实现](../../../src/tracing/monte_carlo_weight.jl)
+- [源权重和单位说明](../monte_carlo_weights.md)
+- [MHD 源参数与 forward tracing 接口示例](../maxwellian_source.jl)
