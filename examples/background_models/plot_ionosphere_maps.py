@@ -8,8 +8,8 @@ mpl.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm
 from matplotlib.font_manager import findfont
-ROOT=Path(__file__).resolve().parents[1]
-IMAGE=ROOT/'examples/images'
+ROOT=Path(__file__).resolve().parents[2]
+IMAGE=ROOT/'examples/background_models/images'
 IMAGE.mkdir(exist_ok=True)
 if len(sys.argv)>1:
     OUT=Path(sys.argv[1]).resolve()
@@ -17,7 +17,7 @@ else:
     OUT=ROOT/'outputs'/('ionosphere_maps_'+datetime.now().strftime('%Y%m%d_%H%M%S'))
     OUT.mkdir(parents=True,exist_ok=False)
     with (OUT/'source.csv').open('w') as data, (OUT/'run.log').open('w') as log:
-        subprocess.run(['julia','--startup-file=no',f'--project={ROOT}',str(ROOT/'examples/sample_ionosphere_maps.jl')],stdout=data,stderr=log,check=True,cwd=ROOT)
+        subprocess.run(['julia','--startup-file=no',f'--project={ROOT}',str(ROOT/'examples/background_models/sample_ionosphere_maps.jl')],stdout=data,stderr=log,check=True,cwd=ROOT)
 a=np.genfromtxt(OUT/'source.csv',delimiter=',',names=True)
 assert len(a)==2*91*181 and all(np.isfinite(a[k]).all() for k in a.dtype.names)
 assert np.allclose(a['flux_m2_s'],a['n_m3']*np.sqrt(a['ux_ms']**2+a['uy_ms']**2+a['uz_ms']**2),rtol=1e-12)

@@ -1,16 +1,15 @@
 # GITM and AMPS atmosphere example
 
-![Atmosphere profiles and maps](atmosphere_gitm200km_amps500km.png)
+![Atmosphere profiles and maps](images/atmosphere_gitm200km_amps500km.png)
 
-Run from any working directory with Python, NumPy, SciPy and Matplotlib installed:
+Run from the repository root with Python, NumPy, SciPy and Matplotlib installed:
 
 ```sh
-python examples/plot_atmosphere.py
+python examples/background_models/plot_atmosphere.py
 ```
 
 Arial must be available. Inputs are the tracked `data/gitm_sph.mat` and
-`data/amps_sph.mat`. Outputs are written beside the script (rerunning replaces
-these example outputs): PNG (300 dpi), source arrays and QA metadata. Only the current PNG figure is tracked; no PDF or SVG is exported.
+`data/amps_sph.mat`. The PNG (300 dpi) is saved in images/; source arrays and QA metadata are saved beside the script. Rerunning replaces these example outputs. Only the current PNG figure is tracked; no PDF or SVG is exported.
 
 Panels, in row order:
 

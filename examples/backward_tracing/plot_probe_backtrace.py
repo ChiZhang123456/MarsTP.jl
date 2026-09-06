@@ -14,13 +14,13 @@ from matplotlib.collections import LineCollection
 from matplotlib.patches import Circle
 from py_space_zc.maven import bs_mpb, plot_mars
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 N = int(os.environ.get('PARTICLE_COUNT', '5000'))
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--data', type=Path, help='Existing trajectories.jsonl to replot without integration')
 args = parser.parse_args()
 OUT = ROOT / 'outputs' / ('probe_backtrace_' + datetime.now().strftime('%Y%m%d_%H%M%S'))
-IMAGE = ROOT / 'examples/images/probe_backtrace_xz_5000'
+IMAGE = ROOT / 'examples/backward_tracing/images/probe_backtrace_xz_5000'
 IMAGE.parent.mkdir(exist_ok=True)
 OUT.mkdir(parents=True, exist_ok=False)
 mpl.rcParams.update({'font.family': 'Arial', 'font.size': 8, 'axes.titlesize': 9,
@@ -32,7 +32,7 @@ if args.data:
 else:
     with (OUT/'run.log').open('w') as log, (OUT/'trajectories.jsonl').open('w') as data:
         proc = subprocess.Popen(['julia', '--startup-file=no', f'--project={ROOT}',
-            str(ROOT/'examples/random_probe_backtrace.jl')], stdout=subprocess.PIPE,
+            str(ROOT/'examples/backward_tracing/random_probe_backtrace.jl')], stdout=subprocess.PIPE,
             stderr=log, text=True, cwd=ROOT)
         for line in proc.stdout:
             if line.startswith('{'):

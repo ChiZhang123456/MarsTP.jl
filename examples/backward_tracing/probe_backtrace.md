@@ -11,20 +11,20 @@
 在仓库根目录执行：
 
 ```sh
-python examples/plot_probe_backtrace.py
+python examples/backward_tracing/plot_probe_backtrace.py
 ```
 
 只重绘已有结果：
 
 ```sh
-python examples/plot_probe_backtrace.py --data outputs/<run_id>/trajectories.jsonl
+python examples/backward_tracing/plot_probe_backtrace.py --data outputs/<run_id>/trajectories.jsonl
 ```
 
 Python 需要 NumPy、Matplotlib、Arial 字体及 Chi Zhang 自定义的 `py_space_zc` 库，后者必须包含 `maven.bs_mpb`、`maven.plot_mars` 和默认火星贴图。这些外部依赖及贴图不复制到仓库。Julia 需要 PATH 中可用的 `julia`，并使用项目的 Project.toml 和 Manifest.toml。原始 MHD 场文件应位于 `data/mars_fields_spherical_from_dat.vts`，该大文件不随代码上传。
 
 本次使用 Julia 1.12.6、TestParticle 0.23.3。脚本不自动安装依赖。默认粒子数为 5000，也可通过环境变量 `PARTICLE_COUNT` 修改；重绘时该值需与数据记录数一致。
 
-每次运行的诊断及初始速度保存于新的 `outputs/probe_backtrace_<timestamp>/`。新积分还保存 `trajectories.jsonl`，每条记录包含粒子 ID、初始速度、负时间序列、三维位置及收敛诊断。重绘模式直接读取指定数据，不复制轨迹文件。图片输出固定在 `examples/images/`，重新运行会更新同名图片。
+每次运行的诊断及初始速度保存于新的 `outputs/probe_backtrace_<timestamp>/`。新积分还保存 `trajectories.jsonl`，每条记录包含粒子 ID、初始速度、负时间序列、三维位置及收敛诊断。重绘模式直接读取指定数据，不复制轨迹文件。图片输出固定在 `examples/backward_tracing/images/`，重新运行会更新同名图片。
 
 ## 初始条件与模型
 

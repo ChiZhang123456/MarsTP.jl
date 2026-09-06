@@ -86,9 +86,9 @@ julia --threads=2 --project=. test/runtests.jl
 The former name `field_work_profile` remains available as a compatibility alias for
 `Electric_field_work_profile`, with identical arguments and return values.
 
-`examples/hemisphere_work.jl` demonstrates `Electric_field_work_profile` on a
+`examples/forward_tracing/hemisphere_work.jl` demonstrates `Electric_field_work_profile` on a
 reproducible 1000-particle, 800 km O2+ shell release. It uses four
-threads when launched by `examples/plot_hemisphere_work.py`, starts at rest, and stops
+threads when launched by `examples/forward_tracing/plot_hemisphere_work.py`, starts at rest, and stops
 at the 200 km or 4 Mars-radius boundary (20,000 s guard). Work ends at the last
 valid in-domain state. Energy closure above 0.1% triggers timestep refinement;
 this is a diagnostic, not a guarantee of full trajectory convergence.
@@ -140,7 +140,7 @@ on the ideal sheet and unresolved grazing crossings raise errors; no arbitrary
 radial-speed floor is applied. A finite-thickness model would be required to
 regularize these cases.
 
-See the [full derivation and unit audit](examples/backtracing_derivation.md)
+See the [full derivation and unit audit](examples/backward_tracing/backtracing_derivation.md)
 for the transport equation, delta-function change of variables, volume
 quadrature, crossing treatment, unit table, background assumptions and limits.
 Run `julia --project=. test/runtests.jl` for analytic tests and

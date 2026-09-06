@@ -21,16 +21,16 @@
 在仓库根目录运行：
 
 ```sh
-python examples/plot_ionosphere_maps.py
+python examples/background_models/plot_ionosphere_maps.py
 ```
 
 复用已有采样结果，只重绘：
 
 ```sh
-python examples/plot_ionosphere_maps.py outputs/ionosphere_maps_<timestamp>
+python examples/background_models/plot_ionosphere_maps.py outputs/ionosphere_maps_<timestamp>
 ```
 
-指定目录必须包含本示例生成的 `source.csv`。无参数运行会创建新的输出目录，保存源数据 CSV、运行日志和 metadata.json。图片统一写到 `examples/images/`，重新运行会更新同名图片。完整采样数据保留在本地 outputs，未随示例上传。
+指定目录必须包含本示例生成的 `source.csv`。无参数运行会创建新的输出目录，保存源数据 CSV、运行日志和 metadata.json。图片统一写到 `examples/background_models/images/`，重新运行会更新同名图片。完整采样数据保留在本地 outputs，未随示例上传。
 
 需要与项目兼容的 Julia（本次 1.12.6、TestParticle 0.23.3），使用项目 Manifest.toml；Python 需要 NumPy、Matplotlib 和 Arial 字体。该图不依赖 py_space_zc，不自动安装任何依赖。
 
@@ -50,4 +50,4 @@ PNG 已进行视觉检查；同列色标分别覆盖未屏蔽数据，不作百�
 
 `BacktraceConfig(ionosphere_altitude_km=400.0)` 设置一层可穿越的面源，内边界始终为 200 km。每次横穿贡献 `F*g/abs(v dot er)`，其中 `F=n*norm(Ui)`，`g` 为归一化 MHD 漂移麦氏分布。穿层后继续累计体积源。该模型取代此前电离层处终止的边界 VDF 模型。
 
-通量和温度图本身不受输运模型调整影响。公式、单位、完整推导及模型限制见 [backtracing 推导](backtracing_derivation.md)。
+通量和温度图本身不受输运模型调整影响。公式、单位、完整推导及模型限制见 [backtracing 推导](../backward_tracing/backtracing_derivation.md)。

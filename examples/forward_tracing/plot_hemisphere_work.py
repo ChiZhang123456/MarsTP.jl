@@ -9,11 +9,11 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import SymLogNorm
 from matplotlib.collections import LineCollection
 from py_space_zc.maven import bs_mpb, plot_mars
-ROOT=Path(__file__).resolve().parents[1]
-PREVIEW=Path(os.environ.get('HEMISPHERE_WORK_PREVIEW', ROOT/'examples/images/electric_work_800km.png'))
+ROOT=Path(__file__).resolve().parents[2]
+PREVIEW=Path(os.environ.get('HEMISPHERE_WORK_PREVIEW', ROOT/'examples/forward_tracing/images/electric_work_800km.png'))
 env=dict(os.environ,WORK_HEMISPHERE='all')
 process=subprocess.Popen(['julia','--startup-file=no','--threads=4',f'--project={ROOT}',
-    str(ROOT/'examples/hemisphere_work.jl')],stdout=subprocess.PIPE,text=True,env=env)
+    str(ROOT/'examples/forward_tracing/hemisphere_work.jl')],stdout=subprocess.PIPE,text=True,env=env)
 records=[json.loads(line) for line in process.stdout if line.startswith('{')]
 if process.wait(): raise RuntimeError('Particle work calculation failed')
 assert len(records)==1000

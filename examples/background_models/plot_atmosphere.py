@@ -19,9 +19,10 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import LogNorm, Normalize
 from matplotlib.font_manager import findfont
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 OUT = Path(__file__).resolve().parent
 OUT.mkdir(parents=True, exist_ok=True)
+(OUT/'images').mkdir(exist_ok=True)
 mpl.rcParams.update({'font.family': 'Arial', 'font.size': 10,
     'axes.spines.top': False,
     'axes.spines.right': False, 'legend.frameon': False})
@@ -129,7 +130,7 @@ for ax,field,letter in zip(axes[1:].flat,['nCO2','nO','Tn','nO_hot'],'cdef'):
 fig.suptitle('GITM and AMPS atmosphere',fontsize=15,fontweight='bold')
 fig.supxlabel('Maps: GITM 200 km (native), AMPS 500 km; Mars radius: 3390 km. Profiles above 220 km:\n'
               'GITM exponential density and constant temperature extension, no zero cutoff.',fontsize=8)
-fig.savefig(OUT/'atmosphere_gitm200km_amps500km.png',dpi=300)
+fig.savefig(OUT/'images'/'atmosphere_gitm200km_amps500km.png',dpi=300)
 plt.close(fig)
 np.savez_compressed(OUT/'atmosphere_source_data.npz',altitude_km=heights,
                     **{'profile_'+k:v for k,v in profiles.items()},

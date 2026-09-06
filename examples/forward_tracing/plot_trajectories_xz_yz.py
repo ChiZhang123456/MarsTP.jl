@@ -11,13 +11,13 @@ import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
 from py_space_zc.maven import bs_mpb, plot_mars
 
-ROOT = Path(__file__).resolve().parents[1]
-PREVIEW = Path(os.environ.get('TRAJECTORY_PREVIEW', ROOT / 'examples/images/trajectories_xz_yz_800km.png'))
+ROOT = Path(__file__).resolve().parents[2]
+PREVIEW = Path(os.environ.get('TRAJECTORY_PREVIEW', ROOT / 'examples/forward_tracing/images/trajectories_xz_yz_800km.png'))
 ALTITUDE = float(os.environ.get('RELEASE_ALTITUDE_KM', '800'))
 mpl.rcParams.update({'font.family': 'Arial', 'font.size': 11})
 process = subprocess.Popen(
     ['julia', '--startup-file=no', '--threads=4', f'--project={ROOT}',
-     str(ROOT / 'examples' / 'sphere_trajectories.jl')],
+     str(ROOT / 'examples' / 'forward_tracing' / 'sphere_trajectories.jl')],
     stdout=subprocess.PIPE, text=True, encoding='utf-8', cwd=ROOT)
 records = [json.loads(line) for line in process.stdout if line.startswith('{')]
 if process.wait():

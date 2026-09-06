@@ -21,14 +21,14 @@
 在仓库根目录，用已配置 `py_space_zc` 的 Python 执行：
 
 ```sh
-python examples/plot_trajectories_xz_yz.py
+python examples/forward_tracing/plot_trajectories_xz_yz.py
 ```
 
-默认输出为 `examples/images/trajectories_xz_yz_800km.png`。要保留已上传的图片，可在运行前指定新路径，例如 PowerShell：
+默认输出为 `examples/forward_tracing/images/trajectories_xz_yz_800km.png`。要保留已上传的图片，可在运行前指定新路径，例如 PowerShell：
 
 ```powershell
 $env:TRAJECTORY_PREVIEW = "$PWD/xz_yz_preview.png"
-python examples/plot_trajectories_xz_yz.py
+python examples/forward_tracing/plot_trajectories_xz_yz.py
 ```
 
 脚本使用 4 个 Julia 线程。Julia 在 PATH 中可用，Python 需要 NumPy、Matplotlib 和用户的自定义 `py_space_zc` 库。完整依赖说明见 [examples README](README.md#环境与输入数据)。运行需要本地的 `data/mars_fields_spherical_from_dat.vts`，该大文件不包含在 GitHub 中。
