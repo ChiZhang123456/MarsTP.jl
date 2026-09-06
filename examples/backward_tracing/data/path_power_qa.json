@@ -6,8 +6,11 @@
   "display_cadence_s": 0.5,
   "sign": "Positive forward-time power means local gain, negative means loss; physical velocity is not negated.",
   "display": "XZ projection; segment-averaged power, no spatial binning; overlap and transparency affect appearance.",
-  "color_scale": "coolwarm SymLogNorm, linear within +/-1 eV/s",
+  "color_scale": "coolwarm SymLogNorm; linear within +/-1 eV/s (power) or +/-1 eV (work)",
   "symmetric_limit_eV_s": 1000.0,
+  "symmetric_limit_eV": 100000.0,
+  "cumulative_definition": "Integral from past endpoint to current location; zero at past endpoint, full net gain at probe. Segment color averages cumulative endpoints.",
+  "cumulative_endpoint_check_max_eV": 3.637978807091713e-11,
   "status_counts": {
     "2": 11,
     "4": 4989

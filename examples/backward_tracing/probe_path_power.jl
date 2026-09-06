@@ -7,18 +7,20 @@ cfg=BacktraceConfig(include_ionosphere=false,dt=-.05,tspan=(0.,-500.))
 rng=Xoshiro(20260905)
 open(joinpath(out,"segments.csv"),"w") do io
  open(joinpath(out,"particles.csv"),"w") do summary
-    println(io,"id,x0_Rm,z0_Rm,x1_Rm,z1_Rm,conv_eV_s,hall_eV_s,total_eV_s")
+    println(io,"id,x0_Rm,z0_Rm,x1_Rm,z1_Rm,conv_eV_s,hall_eV_s,total_eV_s,elapsed_s,lookback_conv_eV,lookback_hall_eV,lookback_total_eV")
     println(summary,"id,vx_kms,vy_kms,vz_kms,status,end_time_s,total_eV,conv_eV,hall_eV,deltaK_eV,residual_eV")
     for i in 1:n
         speed=(10+190rand(rng))*1000;angle=2pi*rand(rng)
         v0=SA[speed*cos(angle),0.,speed*sin(angle)]
         saved=Ref(SA[0.,0.,2Rm]);saved_t=Ref(0.);last=Ref(saved[]);last_t=Ref(0.)
         bucket=zeros(3)
+        cumulative=zeros(3)
         function save_segment()
             elapsed=saved_t[]-last_t[]
             elapsed>0 || return
             power=bucket/elapsed
-            println(io,join((i,saved[][1]/Rm,saved[][3]/Rm,last[][1]/Rm,last[][3]/Rm,power[2],power[3],power[1]),','))
+            cumulative .+= bucket
+            println(io,join((i,saved[][1]/Rm,saved[][3]/Rm,last[][1]/Rm,last[][3]/Rm,power[2],power[3],power[1],elapsed,cumulative[2],cumulative[3],cumulative[1]),','))
             saved[]=last[];saved_t[]=last_t[];fill!(bucket,0.)
         end
         function observe(a,b,ta,tb,dw)
