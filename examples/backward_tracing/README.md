@@ -41,6 +41,12 @@ python examples/backward_tracing/plot_probe_vdf.py outputs/probe_vdf_new_run
 
 检查脚本 [check_probe_vdf_grid.jl](check_probe_vdf_grid.jl) 读取指定输出目录的 `qa_points.csv`，计算高值点在不同 Vy 和时间步长下的结果；随示例的数据目录提供本轮检查点。该脚本依赖同样的 MHD、MAT 体积源及 GITM 输入。
 
+## 4. 对流和 Hall 电场净增能
+
+![全路径电场净增能](images/energy_gain_xz_preliminary.png)
+
+[符号、单位和计算说明](energy_gain.md)。保存每个三维速度网格点的对流、Hall、总电场做功，并按 PSD 对 Vy 加权绘制二维均值。正值为过去到探头的净增能，负值为净失能。数据包含能量闭合检查与异常轨迹步长细化结果；速度网格仍未收敛。
+
 ## 依赖
 
 Julia 使用项目环境。随机轨迹绘图需 Chi Zhang 自定义 py_space_zc（bs_mpb、plot_mars 及火星贴图）、NumPy、Matplotlib、Arial；VDF 绘图只需 NumPy、Matplotlib、Arial。物理运行需仓库 data 中的相应输入，不自动下载或安装。

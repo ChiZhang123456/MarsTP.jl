@@ -17,6 +17,7 @@ Base.@kwdef struct BacktraceConfig
     solver::Symbol = :boris
     dt::Float64 = -0.2
     safety::Float64 = 0.005
+    include_work::Bool = false
     stream_vy::Bool = true
     checkpoint_file::String = project_path("output", "backtrace_checkpoint.jld2")
     output_file::String = project_path("output", "backtrace_vdf.jld2")
@@ -95,12 +96,15 @@ end
 # Streaming quadrature over the entire trajectory down to the fixed 200 km
 # boundary. Source-shell events split the volume quadrature but do not terminate.
 function _trace_sources(position, velocity, param, config, volume_source, ionosphere;
-        outer=Router)
+        outer=Router, work_itp=nothing)
     Rinner < norm(position) < outer ||
         throw(ArgumentError("Detector must lie strictly between 200 km and the outer boundary"))
     shell = _ionosphere_radius(config.ionosphere_altitude_km)
     config.include_ionosphere && abs(norm(position)-shell) <= 1e-7 &&
         throw(ArgumentError("Detector on a zero-thickness source sheet is ambiguous; move it off the sheet"))
+    previous_v = Ref(velocity)
+    work_eV = zeros(3) # forward-time gain: total, convection, Hall
+    charge = TP.SpeciesDict[config.species].q
     previous = Ref(position)
     previous_t = Ref(config.tspan[1])
     previous_q = Ref(volume_source(position, velocity))
@@ -122,6 +126,7 @@ function _trace_sources(position, velocity, param, config, volume_source, ionosp
         nodes = [(f,true) for f in events]
         push!(nodes,(fraction,false))
         last_fraction, last_q = 0.0, previous_q[]
+        last_x, last_v = previous[], previous_v[]
         for (f,is_sheet) in nodes
             x = previous[] + f*(r-previous[])
             hit_t = previous_t[] + f*step
@@ -131,6 +136,14 @@ function _trace_sources(position, velocity, param, config, volume_source, ionosp
             all(isfinite,v) || error("Invalid synchronized velocity at $safe_x")
             q = volume_source(safe_x,v)
             volume[] += 0.5*(last_q+q)*abs((f-last_fraction)*step)
+            if work_itp !== nothing
+                mid_x, mid_v = (last_x+safe_x)/2, (last_v+v)/2
+                forward_dt = -(f-last_fraction)*step
+                for (j, field) in enumerate((work_itp.total,work_itp.conv,work_itp.hall))
+                    work_eV[j] += _work_one(field,mid_x,mid_v,charge,forward_dt)/TP.eV
+                end
+            end
+            last_x, last_v = safe_x,v
             last_fraction, last_q = f,q
             if is_sheet
                 # Nanometre position roundoff near a shared endpoint must not
@@ -151,6 +164,7 @@ function _trace_sources(position, velocity, param, config, volume_source, ionosp
             return true
         end
         previous[],previous_t[],previous_q[] = r,t,last_q
+        previous_v[] = last_v
         return false
     end
     prob = TP.TraceProblem(vcat(position, velocity), config.tspan, param)
@@ -167,7 +181,8 @@ function _trace_sources(position, velocity, param, config, volume_source, ionosp
         error("Backtrace stopped before the requested time without a boundary status")
     end
     return (; volume=volume[], ionosphere=sheet_f[], flux=flux[], crossings=hits[],status=status[],
-        position=endpoint[], velocity=end_velocity[], time=end_time[])
+        position=endpoint[], velocity=end_velocity[], time=end_time[], work_eV,
+        delta_kinetic_eV=TP.SpeciesDict[config.species].m*(dot(velocity,velocity)-dot(end_velocity[],end_velocity[]))/(2TP.eV))
 end
 
 function _validate_backtrace(config)
@@ -195,6 +210,7 @@ function run_backtrace_vdf(config::BacktraceConfig = BacktraceConfig())
     _validate_backtrace(config)
     mkpath(dirname(config.output_file))
     fields = load_mhd_fields(config.mhd_file; electric_field = :total)
+    work_itp = config.include_work ? build_field_work_interpolators(config.mhd_file) : nothing
     source = load_o2plus_source_rates(config.source_file; fill_invalid=false)
     ionosphere_source = config.include_ionosphere ? load_ionosphere_source(config.mhd_file;
         altitude_km=config.ionosphere_altitude_km) : nothing
@@ -216,6 +232,12 @@ function run_backtrace_vdf(config::BacktraceConfig = BacktraceConfig())
     f2d = zeros(Float64, nx, nz)
     f2d_volume = zeros(Float64, nx, nz)
     f2d_ionosphere = zeros(Float64, nx, nz)
+    # Work arrays use (vx, vy, vz, component); disabled runs allocate no 3D grid.
+    work3d_eV = config.include_work ? fill(NaN,nx,ny,nz,3) : nothing
+    delta_kinetic3d_eV = config.include_work ? fill(NaN,nx,ny,nz) : nothing
+    status3d = config.include_work ? zeros(Int,nx,ny,nz) : nothing
+    psd3d = config.include_work ? zeros(nx,ny,nz) : nothing
+    work_numerator = config.include_work ? zeros(nx,nz,3) : nothing
     status_counts = zeros(Int, 5)
     ionosphere_crossings = zeros(Int,nx,nz)
     model = "thin_shell_source_v1"
@@ -232,9 +254,19 @@ function run_backtrace_vdf(config::BacktraceConfig = BacktraceConfig())
         Threads.@threads for index in eachindex(slice)
             I = CartesianIndices(slice)[index]
             velocity = SA[axes.vx[I[1]], vy, axes.vz[I[2]]]
-            result = _trace_sources(position, velocity, param, config, volume_source,
-                sheet_source; outer=last(fields.r))
+            local result = _trace_sources(position, velocity, param, config, volume_source,
+                sheet_source; outer=last(fields.r), work_itp)
             slice[I], sheet_slice[I], flags[I] = result.volume, result.ionosphere, result.status
+            if config.include_work
+                ix,iz = Tuple(I)
+                status3d[ix,iy,iz] = result.status
+                if result.status != 3
+                    work3d_eV[ix,iy,iz,:] .= result.work_eV
+                    delta_kinetic3d_eV[ix,iy,iz] = result.delta_kinetic_eV
+                    psd3d[ix,iy,iz] = result.volume+result.ionosphere
+                    work_numerator[ix,iz,:] .+= psd3d[ix,iy,iz].*result.work_eV.*(config.dvy_kms*1e3)
+                end
+            end
             ionosphere_crossings[I] += result.crossings
             n = Threads.atomic_add!(done, 1) + 1
             config.progress_interval > 0 && n % config.progress_interval == 0 &&
@@ -247,13 +279,18 @@ function run_backtrace_vdf(config::BacktraceConfig = BacktraceConfig())
             status_counts[flag + 1] += count(==(flag), flags)
         end
         if config.stream_vy
-            jldsave(config.checkpoint_file; completed_iy = iy, f2d_xz = f2d, f2d_volume, f2d_ionosphere,
+            jldsave(config.checkpoint_file; work3d_eV, delta_kinetic3d_eV, status3d, psd3d, work_numerator, completed_iy = iy, f2d_xz = f2d, f2d_volume, f2d_ionosphere,
                 status_counts, status_labels, ionosphere_crossings, model, units, source_units, vx_km = axes.vx ./ 1e3, vy_km = axes.vy ./ 1e3,
                 vz_km = axes.vz ./ 1e3, config)
         end
     end
 
-    result = (; vx_km = axes.vx ./ 1e3, vy_km = axes.vy ./ 1e3,
+    mean_work2d_eV = config.include_work ? map((w,f) -> f > 0 ? w/f : NaN,
+        work_numerator, repeat(reshape(f2d,nx,nz,1),1,1,3)) : nothing
+    result = (; work3d_eV, delta_kinetic3d_eV, status3d, psd3d, mean_work2d_eV,
+        work_components=("total","convection","Hall"), work_units="eV",
+        work_definition="Forward-time gain from backtrace endpoint to detector; 2D mean weighted by full-path PSD over vy, not birth-to-detector work",
+        vx_km = axes.vx ./ 1e3, vy_km = axes.vy ./ 1e3,
         vz_km = axes.vz ./ 1e3, f2d_xz = f2d, f2d_volume, f2d_ionosphere, status_counts, config,
         status_labels, ionosphere_crossings, model, source_units,
         ionosphere_flux_definition = "F=n*norm(Ui) [m^-2 s^-1]; each crossing adds F*g/abs(v dot er)",
