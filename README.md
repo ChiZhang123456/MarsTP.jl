@@ -23,6 +23,12 @@ at `data/mars_fields_spherical_from_dat.vts` before running tracing.
 
 ## Basic Use
 
+Monte Carlo Maxwellian initial states and physical weights are available via
+`sample_maxwellian_source`. See [weight definitions and units](examples/forward_tracing/monte_carlo_weights.md)
+and the [local MHD source example](examples/forward_tracing/maxwellian_source.jl).
+For a finite-volume detector, see the [3D phase-space density derivation](examples/forward_tracing/detector_3d_psd.md),
+including residence-time weighting, units, and the distinction from source density weights.
+
 ```julia
 using MarsTP
 
