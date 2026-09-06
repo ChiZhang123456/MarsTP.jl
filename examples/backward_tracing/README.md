@@ -47,6 +47,12 @@ python examples/backward_tracing/plot_probe_vdf.py outputs/probe_vdf_new_run
 
 [符号、单位和计算说明](energy_gain.md)。保存每个三维速度网格点的对流、Hall、总电场做功，并按 PSD 对 Vy 加权绘制二维均值。正值为过去到探头的净增能，负值为净失能。数据包含能量闭合检查与异常轨迹步长细化结果；速度网格仍未收敛。
 
+## 5. 沿路径的局部增能与失能
+
+![沿轨迹的对流、Hall 和总电场功率](images/probe_path_power_xz_5000.png)
+
+[计算定义和运行说明](path_power.md)。复用原 5000 条轨迹初始条件，XZ 投影中的颜色表示正时间局部功率（eV/s），红色增能，蓝色失能，采用 coolwarm 和对称对数色标。
+
 ## 依赖
 
 Julia 使用项目环境。随机轨迹绘图需 Chi Zhang 自定义 py_space_zc（bs_mpb、plot_mars 及火星贴图）、NumPy、Matplotlib、Arial；VDF 绘图只需 NumPy、Matplotlib、Arial。物理运行需仓库 data 中的相应输入，不自动下载或安装。

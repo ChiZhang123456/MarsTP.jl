@@ -96,7 +96,7 @@ end
 # Streaming quadrature over the entire trajectory down to the fixed 200 km
 # boundary. Source-shell events split the volume quadrature but do not terminate.
 function _trace_sources(position, velocity, param, config, volume_source, ionosphere;
-        outer=Router, work_itp=nothing)
+        outer=Router, work_itp=nothing, segment_observer=nothing)
     Rinner < norm(position) < outer ||
         throw(ArgumentError("Detector must lie strictly between 200 km and the outer boundary"))
     shell = _ionosphere_radius(config.ionosphere_altitude_km)
@@ -139,9 +139,13 @@ function _trace_sources(position, velocity, param, config, volume_source, ionosp
             if work_itp !== nothing
                 mid_x, mid_v = (last_x+safe_x)/2, (last_v+v)/2
                 forward_dt = -(f-last_fraction)*step
+                segment_work = zeros(3)
                 for (j, field) in enumerate((work_itp.total,work_itp.conv,work_itp.hall))
-                    work_eV[j] += _work_one(field,mid_x,mid_v,charge,forward_dt)/TP.eV
+                    segment_work[j] = _work_one(field,mid_x,mid_v,charge,forward_dt)/TP.eV
+                    work_eV[j] += segment_work[j]
                 end
+                segment_observer !== nothing && segment_observer(last_x,safe_x,
+                    previous_t[]+last_fraction*step,hit_t,segment_work)
             end
             last_x, last_v = safe_x,v
             last_fraction, last_q = f,q

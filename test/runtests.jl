@@ -65,7 +65,13 @@ include("backtrace_ionosphere.jl")
         fields=MarsTP.FieldWorkInterpolators(_->E,_->2E,_->-E)
         param=MarsTP.TP.prepare(_->E,_->SA[0.,0.,1e-9];species=MarsTP.TP.SpeciesDict["O2+"])
         cfg=BacktraceConfig(include_ionosphere=false,solver=solver,dt=-.03,tspan=(0.,-.97))
-        r=MarsTP._trace_sources(SA[0.,0.,2Rm],SA[0.,0.,1e4],param,cfg,(p,v)->0.,nothing;work_itp=fields)
+        observed=zeros(3)
+        observe=(a,b,ta,tb,dw)->begin
+            @test tb < ta
+            observed .+= dw
+        end
+        r=MarsTP._trace_sources(SA[0.,0.,2Rm],SA[0.,0.,1e4],param,cfg,(p,v)->0.,nothing;work_itp=fields,segment_observer=observe)
+        @test observed ≈ r.work_eV
         @test sign*r.work_eV[1]>0
         @test r.work_eV[1] ≈ r.delta_kinetic_eV rtol=1e-8
         @test r.work_eV[2] ≈ 2r.work_eV[1]
