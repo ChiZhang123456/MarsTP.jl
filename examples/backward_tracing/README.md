@@ -16,7 +16,7 @@ python examples/backward_tracing/plot_probe_backtrace.py
 
 ## 2. 面源和相空间密度推导
 
-[完整推导与单位](backtracing_derivation.md) 对应 400 km 可穿越薄层面源与固定 200 km 内边界。每次穿层累计 `F*g/abs(v dot er)`，穿层后继续积分体积源。核心实现位于仓库 `src/tracing/back_tracing.jl`，MHD 读取位于 `src/data/mhd.jl`。
+[完整推导与单位](backtracing_derivation.md) 对应 400 km 可穿越薄层面源与固定 200 km 内边界。每次穿层累计 `F*g/abs(v dot er)`，穿层后继续积分体积源。核心实现位于仓库 `src/tracing/detector_psd_backward.jl`，MHD 读取位于 `src/data/mhd.jl`。
 
 ## 3. Vy 积分的二维速度分布，尚未收敛
 

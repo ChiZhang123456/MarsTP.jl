@@ -1,6 +1,6 @@
 # O₂⁺ backtracing：体积源与电离层薄层面源的推导和单位
 
-本文对应 `src/tracing/back_tracing.jl` 的 `thin_shell_source_v1` 模型。它取代此前“到达电离层高度即施加边界分布并终止”的模型。电离层现在是一层可穿越的面源，**默认离地 400 km；吸收内边界始终位于离地 200 km**。
+本文对应 `src/tracing/detector_psd_backward.jl` 的 `thin_shell_source_v1` 模型。它取代此前“到达电离层高度即施加边界分布并终止”的模型。电离层现在是一层可穿越的面源，**默认离地 400 km；吸收内边界始终位于离地 200 km**。
 
 ## 1. 模型、位置与粒子定义
 
