@@ -53,6 +53,10 @@ python examples/backward_tracing/plot_probe_vdf.py outputs/probe_vdf_new_run
 
 [计算定义和运行说明](path_power.md)。复用原 5000 条轨迹初始条件，XZ 投影第一行表示局部功率（eV/s），第二行表示从回溯终点到当前位置的累计做功（eV）。红色增能，蓝色失能，采用 coolwarm 和对称对数色标。
 
+## 6. 尾区探头 (-2,0,0) Rm
+
+[新算例说明](tail_probe.md)：5000 个 O2+，速率在 0–100 km/s 均匀采样，三维方向各向同性。提供 XZ 轨迹图，以及对流、Hall、总电场的局部功率与累计做功两行图。
+
 ## 依赖
 
 Julia 使用项目环境。随机轨迹绘图需 Chi Zhang 自定义 py_space_zc（bs_mpb、plot_mars 及火星贴图）、NumPy、Matplotlib、Arial；VDF 绘图只需 NumPy、Matplotlib、Arial。物理运行需仓库 data 中的相应输入，不自动下载或安装。
