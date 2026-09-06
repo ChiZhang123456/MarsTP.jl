@@ -6,7 +6,7 @@
 
 - `random_probe_backtrace.jl`：Julia 轨迹积分、边界终止和步长减半检查。
 - `plot_probe_backtrace.py`：调用同目录的 Julia 脚本，保存轨迹与诊断，绘制 XZ 图。
-- `images/probe_backtrace_xz_5000.png`、`.pdf`、`.svg`：已生成的图片，PDF/SVG 保留可编辑文字，密集轨迹以 600 dpi 栅格层保存。
+- `images/probe_backtrace_xz_5000.png`：已生成的 PNG 图片。
 
 在仓库根目录执行：
 

@@ -27,7 +27,7 @@ Ti=a['Ti_K'].reshape(flux.shape)
 assert (flux>=0).all() and (Ti>0).all()
 findfont('Arial',fallback_to_default=False)
 mpl.rcParams.update({'font.family':'Arial','font.size':9,'axes.labelsize':9,'axes.titlesize':10,
-    'axes.linewidth':.6,'pdf.fonttype':42,'svg.fonttype':'none'})
+    'axes.linewidth':.6})
 # Contract: quantitative grid; compare shell structure with shared logarithmic
 # scales per quantity, preserving all positive values without clipping.
 fig,axes=plt.subplots(2,2,figsize=(183/25.4,145/25.4),layout='constrained',sharex=True,sharey=True)
@@ -44,10 +44,6 @@ for col,(values,label,title) in enumerate([(flux,r'$n_i|\mathbf{U}_i|$ (cm$^{-2}
         ax.tick_params(direction='out',width=.6,length=3)
     fig.colorbar(im,ax=axes[:,col].tolist(),location='bottom',shrink=.9,pad=.06,label=label)
 fig.savefig(IMAGE/'flux_Ti_200_400km.png',dpi=350)
-fig.savefig(IMAGE/'flux_Ti_200_400km.pdf',dpi=600)
-fig.savefig(IMAGE/'flux_Ti_200_400km.svg',dpi=600)
-svg=IMAGE/'flux_Ti_200_400km.svg'
-svg.write_text('\n'.join(line.rstrip() for line in svg.read_text(encoding='utf-8').splitlines())+'\n',encoding='utf-8')
 meta={'altitude_km':[200,400],'Rm_km':3390,'grid_deg':2,'coordinate':'MSO spherical angles, latitude=90-colatitude; longitude=atan2(y,x)',
     'flux_definition':'n*norm(Ui), no radial projection','flux_plot_unit':'cm^-2 s^-1','temperature_plot_unit':'K',
     'zero_flux_count':[int((x==0).sum()) for x in flux], 'zero_flux_color':'light grey', 'masked_latitude_deg':-90, 'mask_reason':'suspect south-pole moments, temperature near 1e-10 K and zero bulk speed; no interpolation repair', 'color_scale_excludes_masked_pole':True, 'scale':'shared logarithmic per column; no clipping','flux_range_cm2_s':[[float(x.min()),float(x.max())] for x in flux],

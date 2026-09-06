@@ -28,7 +28,7 @@ python examples/background_models/plot_ionosphere_maps.py outputs/ionosphere_map
 python examples/background_models/plot_atmosphere.py
 ```
 
-图保存在 `images/`。本地生成的 `atmosphere_source_data.npz` 和 `metadata.json` 保留在本目录，不作为原始输入上传。PNG/PDF/SVG 为已有输出，不因本次目录整理而重算物理数据。
+图保存在 `images/`。本地生成的 `atmosphere_source_data.npz` 和 `metadata.json` 保留在本目录，不作为原始输入上传。PNG 为已有输出，不因本次目录整理而重算物理数据。
 
 ## 模型输入与运行环境
 

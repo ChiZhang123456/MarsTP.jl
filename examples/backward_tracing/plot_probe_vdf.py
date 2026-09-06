@@ -16,7 +16,7 @@ f=a['f_total_s2_m5'].reshape(len(vz),len(vx))
 fvol=a['f_volume_s2_m5'].reshape(f.shape);fsheet=a['f_sheet_s2_m5'].reshape(f.shape)
 assert np.isfinite(f).all() and (f>=0).all() and np.allclose(f,fvol+fsheet,rtol=1e-12,atol=0)
 findfont('Arial',fallback_to_default=False)
-mpl.rcParams.update({'font.family':'Arial','font.size':9,'axes.labelsize':10,'axes.linewidth':.7,'pdf.fonttype':42,'svg.fonttype':'none'})
+mpl.rcParams.update({'font.family':'Arial','font.size':9,'axes.labelsize':10,'axes.linewidth':.7})
 # Quantitative single-panel figure: show the physical source-weighted VDF.
 # Native 10 km/s grid, no smoothing. Finite Vy integration range is in the title.
 positive=f[f>0]
@@ -30,7 +30,6 @@ ax.set_title(r'O$_2^+$ at (0, 0, 2 $R_M$), preliminary grid'+'\n'+r'$f_{xz}=\int
 fig.colorbar(im,ax=ax,pad=.025,shrink=.83,extend='min' if positive.min()<lower else 'neither',label=r'$f_{xz}$ (s$^2$ m$^{-5}$)')
 ax.axhline(0,color='#444444',alpha=.22,lw=.6);ax.axvline(0,color='#444444',alpha=.22,lw=.6)
 fig.savefig(image_dir/'vdf_xz_preliminary.png',dpi=350)
-fig.savefig(image_dir/'vdf_xz_preliminary.pdf',dpi=600)
 peak=np.unravel_index(np.argmax(f),f.shape)
 meta={'definition':'Vy-integrated marginal VDF, not Vy=0 slice','units':'s^2 m^-5','detector_Rm':[0,0,2],
  'vx_vz_range_kms':[-200,200],'dvx_dvz_kms':10,'vy_range_kms':[-200,200],'dvy_kms':20,

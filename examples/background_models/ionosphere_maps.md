@@ -8,13 +8,13 @@
 
 通量按三维体速度大小计算，不取径向分量、不裁剪负径向速度。它不是穿过球面的净法向通量，也不包含额外的热通量。计算时先插值 n、Ti 和三个笛卡尔 Ui 分量，再计算 n*norm(Ui)，最后从 m⁻² s⁻¹ 转为 cm⁻² s⁻¹。
 
-每列两个高度共用对数色标，使用 turbo、Arial 字体。版面为 183×145 mm。PNG 为 350 dpi；PDF/SVG 保留可编辑文字，分布图以 600 dpi 栅格层保存。没有底部说明段落。
+每列两个高度共用对数色标，使用 turbo、Arial 字体。版面为 183×145 mm。仅导出 350 dpi PNG。没有底部说明段落。
 
 ## 文件
 
 - `sample_ionosphere_maps.jl`：调用 MarsTP 的电离层矩插值接口，采样 200、400 km 球面。
 - `plot_ionosphere_maps.py`：调用同目录 Julia 脚本，验证采样结果，生成 2×2 图。
-- `images/flux_Ti_200_400km.png`、`.pdf`、`.svg`：本次输出。
+- `images/flux_Ti_200_400km.png`：本次输出。
 
 ## 复现
 

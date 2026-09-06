@@ -25,7 +25,7 @@ IMAGE.parent.mkdir(exist_ok=True)
 OUT.mkdir(parents=True, exist_ok=False)
 mpl.rcParams.update({'font.family': 'Arial', 'font.size': 8, 'axes.titlesize': 9,
     'axes.labelsize': 9, 'axes.linewidth': 0.6, 'xtick.major.width': 0.6,
-    'ytick.major.width': 0.6, 'pdf.fonttype': 42, 'svg.fonttype': 'none'})
+    'ytick.major.width': 0.6})
 records = []
 if args.data:
     records = [json.loads(line) for line in args.data.open()]
@@ -96,7 +96,5 @@ ax.set_title(f'{N:,} O$_2^+$ backtraces from (0, 0, 2 $R_M$)\n'
     f'Inner: {counts["inner"]}   |   Outer: {counts["outer"]}   |   '
     f'500 s limit: {counts["time_limit"]}',fontsize=10,pad=9)
 fig.savefig(IMAGE.with_suffix('.png'),dpi=400)
-fig.savefig(IMAGE.with_suffix('.pdf'),dpi=600)
-fig.savefig(IMAGE.with_suffix('.svg'),dpi=600)
 print(json.dumps(summary,indent=2))
 print('OUTPUT:',OUT,flush=True)
