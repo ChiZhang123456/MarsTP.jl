@@ -1,4 +1,5 @@
 """Mars disk/sphere and axisymmetric empirical BS/MPB, coordinates in Rm."""
+from pathlib import Path
 import numpy as np
 from matplotlib.patches import Circle
 
@@ -26,18 +27,27 @@ def boundary_profile(name, xmin=-5., samples=500):
 
 
 def plot_mars(ax, radius=1., center=None, color="#b97956", alpha=1.,
-              texture=False, texture_path=None, facecolor=None, edgecolor="#654b3c",
+              texture=None, texture_path=None, facecolor=None, edgecolor="#654b3c",
               lw=.6, zorder=5):
-    """Draw a solid disk or sphere. Lengths use the axes' units (normally Rm)."""
+    """Draw a bundled Mars disk in 2D, or a solid sphere in 3D.
+
+    texture=None selects these defaults; texture=False requests a solid disk.
+    A disk photograph is not a longitude/latitude texture for a 3D sphere.
+    Lengths use the axes units (normally Rm).
+    """
     if not np.isfinite(radius) or radius <= 0:
         raise ValueError("radius must be positive")
     color = facecolor or color
+    if texture is None:
+        texture = ax.name != "3d"
     if texture:
-        if texture_path is None or ax.name == "3d":
-            raise ValueError("Texture needs a supplied disk image and a 2D axis")
+        if ax.name == "3d":
+            raise ValueError("Disk images require a 2D axis; use texture=False for a sphere")
+        if texture_path is None:
+            texture_path = Path(__file__).with_name("mars_globe_true_color.png")
         import matplotlib.pyplot as plt
         cx, cy = (0,0) if center is None else center
-        return ax.imshow(plt.imread(texture_path), extent=(cx-radius,cx+radius,cy-radius,cy+radius), alpha=alpha,zorder=zorder)
+        return ax.imshow(plt.imread(texture_path), extent=(cx-radius,cx+radius,cy-radius,cy+radius), alpha=alpha,zorder=zorder, origin="upper")
     if ax.name == "3d":
         center = np.zeros(3) if center is None else np.asarray(center)
         u, v = np.meshgrid(np.linspace(0, 2*np.pi, 60), np.linspace(0, np.pi, 30))

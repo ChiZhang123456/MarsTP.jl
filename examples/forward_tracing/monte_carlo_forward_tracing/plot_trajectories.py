@@ -87,7 +87,7 @@ def main():
                    boundary_color='black', boundary_ls='--', boundary_lw=1, mars_lw=0, mars_ls='-')
             bs_mpb(ax=ax, draw_bs=False, draw_mpb=True, sphere=False,
                    boundary_color='black', boundary_ls=':', boundary_lw=1, mars_lw=0, mars_ls='-')
-        plot_mars(ax=ax, texture=False, facecolor='#b9a296', edgecolor='black', lw=.7, zorder=5)
+        plot_mars(ax=ax, texture=True, facecolor='#b9a296', edgecolor='black', lw=.7, zorder=5)
         ax.add_patch(Circle((0,0), 1+meta['source_altitude_km']*1000/meta['Rm_m'],
                             fill=False, ec='gray', lw=.8, zorder=6))
         ax.add_patch(Rectangle((center[i]-side/2,center[j]-side/2),side,side,

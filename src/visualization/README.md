@@ -43,7 +43,9 @@ fig, axes, records = plot_trajectory(
 
 ## 火星、BS 和 MPB
 
-`plot_mars` 在二维坐标轴绘制圆盘，在三维坐标轴绘制球体。默认不需要纹理文件；二维纹理可通过 `texture=True, texture_path=...` 指定自己的图片。
+`plot_mars` 在二维坐标轴默认使用随仓库附带的 [火星图片](mars_globe_true_color.png)，无需安装 `py_space_zc` 或指定图片路径。图片来自用户提供的 `py_space_zc.maven` 本地资源，文件原样复制。使用 `texture=False` 可画纯色圆盘，`texture_path=...` 可指定自己的图片。
+
+三维坐标轴默认绘制球体。这张图片是火星圆盘照片，不是经纬度展开的全球纹理，因此不直接贴到三维球面。
 
 `bs_mpb` 使用与 `py_space_zc.maven.bs_mpb` 相同的圆锥曲线参数。x、ρ、r、x₀、L 均以 Rm 表示，θ 为 rad，偏心率 ε 无量纲：
 
