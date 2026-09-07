@@ -1,8 +1,6 @@
 # MarsTP.jl
 
-Clean Mars test-particle tracing package for O2+ work with MHD fields, prepared
-source rates, GITM neutral temperature, and detector velocity-distribution
-analysis.
+MarsTP.jl is a Mars test-particle modeling package built on TestParticle.jl. It combines MHD electromagnetic fields and plasma moments with GITM and AMPS atmospheric inputs to support forward and backward particle tracing, velocity-distribution analysis at fixed locations, work calculations for different electric-field components, and ion escape analysis.
 
 ## Reproducible figure examples
 
