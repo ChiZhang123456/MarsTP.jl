@@ -17,7 +17,7 @@ from matplotlib.font_manager import findfont
 
 def sample_demo(count=100_000, seed=20260907):
     if count < 2:
-        raise ValueError('At least two proposal draws are required')
+        raise ValueError('At least two Maxwellian samples are required')
     n, mass, qe, temperature_ev = 5e6, 5.352390155808e-26, 1.602176634e-19, 10.
     bulk = np.array([-10e3, 0.])
     factor, area = 4., 1.
@@ -82,7 +82,7 @@ def main():
         ax.set(xlim=np.array(xlim)/1000,ylim=np.array(ylim)/1000,
                xlabel=r'$v_x$ (km/s)',ylabel=r'$v_y$ (km/s)',aspect='equal')
     fig.suptitle('O$_2^+$: $n$ = 5 cm$^{-3}$, $U_x$ = -10 km/s, $T$ = 10 eV, $v_z$ = 0\n'
-                 f'{args.count:,} proposal draws; '+r'$T_s=4T$; source area = 1 m$^2$, normal = $-\hat{x}$')
+                 f'{args.count:,} Maxwellian samples; '+r'$T_s=4T$; source area = 1 m$^2$, normal = $-\hat{x}$')
     args.output.parent.mkdir(parents=True,exist_ok=True)
     fig.savefig(args.output,dpi=220,bbox_inches='tight')
     plt.close(fig)

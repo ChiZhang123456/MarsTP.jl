@@ -1,62 +1,61 @@
-# 800 km 球面采样：前向追踪与电场加速
+# Forward tracing from an 800 km release sphere
 
-## 800 km O₂⁺ 轨迹与电场做功
+## O₂⁺ trajectories and electric work
 
+These examples use the same random spherical release positions for 1000 initially stationary O₂⁺ particles. Figure 1 shows XZ and YZ projections in six panels; Figure 2 shows cumulative electric work along XZ projections. Julia handles integration and work analysis. Python uses Matplotlib and the MarsTP `src/visualization` module.
 
-这两个示例使用相同的球面随机释放方向，模拟 1000 个初始静止 O₂⁺。图 1 用无图例的 3×2 六面板展示轨迹的 XZ 和 YZ 投影，图 2 在 XZ 投影上展示各电场分量沿轨迹的累计做功。Julia 负责积分和做功分析，Python 使用 `py_space_zc.maven.bs_mpb`、`plot_mars` 和 Matplotlib 绘图。
+## Code
 
-## 文件
+See [XZ and YZ trajectory panels](trajectories_xz_yz.md) for Figure 1.
 
-图 1 的详细说明与复现命令见 [XZ 与 YZ 的 3×2 轨迹对照图](trajectories_xz_yz.md)。
+| File | Purpose |
+| --- | --- |
+| [sphere_trajectories.jl](sphere_trajectories.jl) | Integration and boundary termination |
+| [plot_sphere_trajectories.py](plot_sphere_trajectories.py) | Optional legacy XZ panels, `trajectories_xz_legacy.png` |
+| [plot_trajectories_xz_yz.py](plot_trajectories_xz_yz.py) | All, dayside and nightside XZ/YZ panels |
+| [hemisphere_work.jl](hemisphere_work.jl) | Per-particle work and energy closure |
+| [plot_hemisphere_work.py](plot_hemisphere_work.py) | Dayside/nightside panels for three field terms |
 
-| 文件 | 用途 |
-|---|---|
-| [sphere_trajectories.jl](sphere_trajectories.jl) | 轨迹积分和边界终止 |
-| [plot_sphere_trajectories.py](plot_sphere_trajectories.py) | 可选的旧版 XZ 三面板绘图，输出 `trajectories_xz_legacy.png` |
-| [plot_trajectories_xz_yz.py](plot_trajectories_xz_yz.py) | 全部、向阳面、背阳面的 XZ/YZ 六个面板 |
-| [hemisphere_work.jl](hemisphere_work.jl) | 逐粒子做功分析和能量闭合检查 |
-| [plot_hemisphere_work.py](plot_hemisphere_work.py) | 日夜两侧、三个电场分量的 2×3 面板 |
+The plotting scripts call Julia files in this directory. Paths are passed through stdout into Python memory; these examples save PNGs rather than trajectory files, so replotting reintegrates the trajectories.
 
-图 1 和图 2 的 Python 入口分别为 `plot_trajectories_xz_yz.py` 和 `plot_hemisphere_work.py`，均调用本目录中的 Julia 文件，不依赖仓库 `scripts/` 目录。轨迹通过标准输出传入 Python 内存，不保存轨迹数据文件；仅保存 PNG 图片。每次重新绘图会重新积分。
+## Initial conditions and boundaries
 
-## 初始条件和边界
+| Parameter | Value |
+| --- | --- |
+| Species | O₂⁺, mass and charge from TestParticle `SpeciesDict` |
+| Release altitude | 800 km |
+| Initial velocity | (0,0,0) m/s |
+| Particle count | 1000, including 500 dayside and 500 nightside releases |
+| Surface sampling | Uniform cos(theta) and azimuth |
+| Random generator | `Xoshiro(20260905)` |
+| Mars radius | 3390 km |
+| Boundaries | 200 km altitude and 4 Rm from the center |
+| Time limit | 20,000 s; reaching it is not a boundary crossing |
+| Integration | TestParticle Boris, baseline dt=0.1 s, four Julia threads |
+| Fields | Static `E_Total [V/m]` and `B_Field [T]` |
 
-| 参数 | 本次图片使用的值 |
-|---|---|
-| 粒子 | O₂⁺，质量与电荷取自 TestParticle 的 `SpeciesDict` |
-| 释放高度 | 800 km |
-| 初始速度 | 三个笛卡尔分量均为 0 m/s |
-| 粒子数 | 1000，按初始 X 分为向阳面 500 个、背阳面 500 个 |
-| 球面采样 | `cos(theta)` 与方位角分别均匀采样 |
-| 随机数 | `Xoshiro(20260905)` |
-| 火星半径 | MarsTP 的 `Rm = 3390 km` |
-| 终止边界 | 高度 200 km 的内球面，或火心距离 `4 Rm` 的外球面 |
-| 时间保护上限 | 20,000 s；达到上限不视为触边 |
-| 积分 | TestParticle Boris，基准步长 0.1 s，4 个 Julia 线程 |
-| 场 | 静态 `E_Total [V/m]` 和 `B_Field [T]` |
+The nonrelativistic Lorentz model omits collisions, gravity, chemical source weights and feedback. BS and MPB are plotting references, not termination surfaces. XZ includes all Y positions and YZ includes all X positions; projected overlap with the Mars disk does not imply impact.
 
-这些示例采用非相对论洛伦兹力模型，不包含碰撞、重力、化学生成权重或粒子反馈。XZ 面板中的 BS 和 MPB 是 `py_space_zc` 画出的参考曲线，不是积分终止边界。XZ 投影包含所有 Y 位置，YZ 投影包含所有 X 位置，均为完整三维轨迹的投影；轨迹投影进入火星圆盘不代表实际粒子进入火星。
+## Environment and inputs
 
-## 环境与输入数据
+1. Use a compatible Julia on PATH. The original figures used Julia 1.12.6 and the project Manifest.toml.
+2. Prepare the project with `julia --project=. -e "using Pkg; Pkg.instantiate()"`.
+3. Python requires NumPy, Matplotlib and h5py. Mars and boundaries are bundled in `src/visualization`.
+4. Install the Arial font.
+5. Provide `data/mars_fields_spherical_from_dat.vts`, including `B_Field [T]`, `E_Total [V/m]`, `E_conv [V/m]` and `E_hall [V/m]`, with MarsTP grid conventions. This large file is not distributed on GitHub.
 
-1. 安装与项目兼容的 Julia，并让 `julia` 位于 PATH。生成这两张图片时使用 Julia 1.12.6 和仓库的 `Manifest.toml`。
-2. 在仓库根目录执行 `julia --project=. -e "using Pkg; Pkg.instantiate()"`，准备 Julia 依赖。
-3. Python 需要 NumPy、Matplotlib，以及提供 `maven.bs_mpb`、`maven.plot_mars` 和火星贴图的 **Chi Zhang 自定义 `py_space_zc` 库**。这个库不包含在本仓库中，不能假设任意同名包都提供相同接口。安装并配置它后再运行绘图入口。
-4. 系统需要 Arial 字体。
-5. 将场文件放在 `data/mars_fields_spherical_from_dat.vts`。该大文件不上传 GitHub。必须包含 `B_Field [T]`、`E_Total [V/m]`、`E_conv [V/m]` 和 `E_hall [V/m]`，且网格与 MarsTP 数据读取约定一致。仅凭图片无法复现原始场。
+These examples use electromagnetic fields only, without AMPS, GITM or source-rate MAT inputs. Scripts do not install dependencies automatically.
 
-这些示例只读取电磁场，不使用 AMPS、GITM 或源项 MAT 文件。它们也不自动安装任何依赖。
+## Run
 
-## 运行
-
-在仓库根目录，用已配置 `py_space_zc` 的 Python 运行：
+From the repository root:
 
 ```sh
 python examples/forward_tracing/plot_trajectories_xz_yz.py
 python examples/forward_tracing/plot_hemisphere_work.py
 ```
 
-默认输出为本目录 `images/` 下的两个 PNG，重新运行会更新对应图片。如果希望保留已有图片，先设置输出路径，例如 Windows PowerShell：
+Default PNGs are written to `images/`, replacing matching names. To use different paths in PowerShell:
 
 ```powershell
 $env:TRAJECTORY_PREVIEW = "$PWD/trajectory_preview.png"
@@ -65,46 +64,48 @@ python examples/forward_tracing/plot_trajectories_xz_yz.py
 python examples/forward_tracing/plot_hemisphere_work.py
 ```
 
-轨迹示例还支持 `RELEASE_ALTITUDE_KM`、`PARTICLE_COUNT`、`TRACE_DT` 和 `TRACE_LIMIT` 环境变量，默认分别为 800、1000、0.1、20000。做功示例固定为本文的 800 km、1000 粒子配置，以确保与图片对应。做功绘图入口会设置 `WORK_HEMISPHERE=all`，Julia 单独运行时默认只分析向阳面。
+Trajectory settings can be changed using `RELEASE_ALTITUDE_KM`, `PARTICLE_COUNT`, `TRACE_DT` and `TRACE_LIMIT` (defaults: 800, 1000, 0.1 and 20000). The work example fixes 800 km and 1000 particles. Its plotting script sets `WORK_HEMISPHERE=all`; Julia alone defaults to dayside analysis.
 
-## 图 1：无图例的 XZ/YZ 六面板轨迹
+## Figure 1: XZ/YZ trajectories
 
-![800 km O₂⁺ 轨迹，三行依次为全部、向阳面和背阳面，左列 XZ，右列 YZ，无图例](images/trajectories_xz_yz_800km.png)
+![All, dayside and nightside O2+ trajectories](images/trajectories_xz_yz_800km.png)
 
-图按 **3 行、2 列**排列，第一列为 XZ 投影，第二列为 YZ 投影。第一行为全部粒子（`All O2+`），第二行为向阳面粒子（`Dayside O2+`），第三行为背阳面粒子（`Nightside O2+`）。六个面板使用相同坐标尺度和等比例坐标轴，位置以火星半径 `Rm = 3390 km` 归一化。图中不显示主标题、底部图例或底部说明文字。
+Rows show all, dayside and nightside particles; columns show XZ and YZ. All axes have equal scale in Rm. Groups are defined by initial position, with dayside `X0>0` and nightside `X0<=0`, and remain fixed as particles move. Blue indicates the outer boundary and orange the inner boundary. Dark points mark release positions; gray circles mark the release sphere. XZ shows BS/MPB and the Mars image; YZ shows a geometric disk.
 
-分组依据**起始位置**：向阳面为 `X0 > 0`，背阳面为 `X0 <= 0`。每行两列显示同一批粒子的完整轨迹，粒子随后跨过日夜分界面不会改变所属分组。蓝色表示到达外边界，橙色表示返回内边界；深色小点表示释放位置，细灰圆表示 800 km 释放球面的投影轮廓。
+| Group | Outer boundary | Inner boundary |
+| --- | ---: | ---: |
+| All | 736 | 264 |
+| Dayside | 453 | 47 |
+| Nightside | 283 | 217 |
 
-XZ 列绘制火星贴图、BS 虚线和 MPB 点线；YZ 列绘制火星几何圆盘，不绘制 BS/MPB 参考曲线。绘图代码见 [plot_trajectories_xz_yz.py](plot_trajectories_xz_yz.py)，完整说明见 [XZ/YZ 说明](trajectories_xz_yz.md)。
+All particles in the original run reached a boundary; the longest flight was about 4148.53 s. Endpoints use the final segment's spherical intersection. Display points are thinned while the integration step remains 0.1 s.
 
-| 分组 | 到达外边界 | 返回内边界 |
-|---|---:|---:|
-| 全部 | 736 | 264 |
-| 向阳面 | 453 | 47 |
-| 背阳面 | 283 | 217 |
-
-本次所有粒子均触边，最长飞行时间约 4148.53 s。轨迹图使用积分末步线段与球面的交点作为边界终点。记录并绘制的点有抽稀，但积分步长保持 0.1 s。
-
-## 图 2：日夜两侧累计电场做功
+## Figure 2: cumulative electric work
 
 ![Dayside and nightside electric work](images/electric_work_800km.png)
 
-第一行向阳面，第二行背阳面；三列依次是对流电场、Hall 电场和总电场做功。调用核心函数 `Electric_field_work_profile(sol, itp)`，对同一条由总电场驱动的轨迹计算：
+Rows show dayside and nightside releases. Columns show convective, Hall and total electric work. `Electric_field_work_profile(sol, itp)` evaluates all terms along the same total-field trajectory. With q in C, E in V/m, x in m, v in m/s and time in s, W below is in J:
 
-$$W_i(t)=q\int_{t_0}^{t}\mathbf{E}_i[\mathbf{x}(t')]\cdot\mathbf{v}(t')\,dt'.$$
+$$
+W_i(t)=q\int_{t_0}^{t}\mathbf E_i[\mathbf x(t')]\cdot\mathbf v(t')\,dt'.
+$$
 
-颜色表示从释放时刻到当前位置的**累计带符号做功**，不是该位置的瞬时功率。红色表示净增能，蓝色表示净减能，单位 keV。第三列直接积分 `E_Total`，不是用动能替代。`Electric_field_work_profile` 也返回瞬时功率和能量闭合残差，详见根目录 README 和函数 docstring。
+Colors show signed cumulative work from release, converted to keV. Red indicates gain and blue loss. The total term directly integrates `E_Total`. The function also returns instantaneous power and energy-closure residuals; see the root README and docstring.
 
-每行三列共用一套对称对数色标，线性区阈值为 0.1 keV。上下两行独立取各自所有分量的最大绝对累计做功作为 clim：本次向阳面约 ±17.5032 keV，背阳面约 ±17.3483 keV。因此跨行比较时要同时读取色标。
+Each row shares a symmetric logarithmic scale with a 0.1 keV linear threshold. Original ranges were about ±17.5032 keV on the dayside and ±17.3483 keV on the nightside. Read the color scales when comparing rows.
 
-做功在每个保存的积分步上采用中点求积，仅绘图时抽稀。停止于场域内最后一个有效状态，不在外推点计算电场。检查 `ΔK - W_total`；若其绝对值除以 `max(abs(ΔK), 1 eV)` 大于 0.1%，自动依次尝试 0.05、0.025、0.0125 s 步长，仍不满足则报错。本次最大相对残差：向阳面约 0.0869%，背阳面约 0.0520%。能量闭合良好不等同于完整的轨迹收敛验证。
+Work uses midpoint quadrature on saved integration steps; only display points are thinned. Field evaluation stops at the last valid state. If `abs(ΔK-W_total)/max(abs(ΔK),1 eV)` exceeds 0.1%, the example retries dt=0.05, 0.025 and 0.0125 s, then errors if necessary. Original maximum residuals were 0.0869% and 0.0520% for dayside and nightside. Energy closure alone does not establish trajectory convergence.
 
-做功分解不能直接预测删除某一电场分量后的粒子能量，因为那样也会改变轨迹。均匀、零速度球面释放的轨迹数不是按真实源项加权的粒子通量。
+Removing a field term would also change the path, so this decomposition does not directly predict that modified simulation. Unweighted stationary releases do not represent physical particle fluxes.
 
-## 验证
+## Checks
 
 ```sh
 julia --threads=2 --project=. test/runtests.jl
 ```
 
-核心做功测试覆盖笛卡尔坐标一致性、正负做功、反向时间、单粒子和多粒子输入、并行结果、非法数据，以及均匀电场中的能量闭合。示例运行时另外检查粒子数量、有限值、边界终止或能量残差。
+Work tests cover Cartesian consistency, signed work, backward time, single and multiple particles, parallel results, invalid data and uniform-field energy closure. Examples also check counts, finite states, termination and work residuals.
+
+## Monte Carlo source and detector distributions
+
+See [Monte Carlo forward tracing](monte_carlo_forward_tracing/README.md) for weighted source sampling, trajectory storage and detector VDFs.

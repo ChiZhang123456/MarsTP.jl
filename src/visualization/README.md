@@ -1,35 +1,35 @@
-# 火星边界与轨迹绘图
+# Mars boundaries and trajectory visualization
 
-Python 绘图模块，依赖 NumPy、Matplotlib、h5py 和 Python 3.11+，无需 `py_space_zc`。在仓库根目录执行以下命令。
+Python visualization with NumPy, Matplotlib, h5py and Python 3.11+. No `py_space_zc` installation is required. Run commands from the repository root.
 
-## 轨迹图
+## Trajectory plots
 
-`plot_trajectory.py` 读取轨迹文件，调用 `mars.py` 绘制火星、BS 和 MPB，输出 PNG。
+`plot_trajectory.py` reads saved trajectories and uses `mars.py` to draw Mars, the bow shock (BS) and magnetic pileup boundary (MPB). Output is PNG.
 
 ```powershell
-# Forward：分批保存的 JLD2 目录，选择 O2+，画三个二维投影。
+# Forward JLD2 batches: select O2+ and draw three projections.
 python src/visualization/plot_trajectory.py outputs/my_run --species O2+ --count 5000 --output outputs/forward.png
 
-# Backward：points 用 Rm、times_s 用 s 的 JSONL 文件。
+# Backward JSONL: positions in Rm and times in s.
 python src/visualization/plot_trajectory.py outputs/my_backtrace/trajectories.jsonl --position-unit Rm --species O2+ --planes XZ XY YZ 3D --output outputs/backward.png
 
-# 指定物种和计算粒子 ID。
+# Select species and computational-particle IDs.
 python src/visualization/plot_trajectory.py outputs/my_run --species O2+ --particle-ids 12 45 91 --planes 3D --output outputs/selected.png
 ```
 
-`--species O2+` 筛选离子种类；`--particle-ids` 选择保存时的粒子编号。物种信息按逐粒子字段、文件字段、旁边的 `metadata.toml` 或 `metadata.json` 读取。混合物种文件可以给每条轨迹单独标记物种。缺少物种标签的旧数据，使用 `--assume-species O2+` 显式声明其物种；此参数不会改写已有标签，也不会把其他物种转换成 O₂⁺。
+`--species` selects the ion species; `--particle-ids` selects saved particle numbers. Species labels are read from per-particle fields, file fields or adjacent `metadata.toml`/`metadata.json`. Mixed-species data can label individual records. For old data without labels, `--assume-species O2+` explicitly declares the species. It does not override existing labels or transform particles into another species.
 
-`--count` 控制最多显示的轨迹数，默认 5000，使用固定随机种子的等概率蓄水池抽样；`--max-points` 控制每条曲线最多显示的点数，默认 300，并保留首尾点。文件名与粒子 ID 共同标识轨迹，传入单个文件可进一步限定选择范围。
+`--count` limits displayed trajectories (default 5000), using uniform reservoir sampling with a fixed seed. `--max-points` limits displayed points per trajectory (default 300), retaining both endpoints. A file and particle ID together identify a path; pass a single file to narrow the selection.
 
-### 文件格式
+### File formats
 
-- `write_trajectory_batch` 输出的 JLD2：`p<ID>/state` 经 h5py 读取为 N×7，列顺序为 t,x,y,z,vx,vy,vz，单位 s、m、m/s。支持相同结构的 HDF5 文件。读取时保留时间方向，递增为 forward，递减为 backward。
-- JSONL：每行一个对象，至少包含 `id`、`points`（N×3）和 `times_s`（N 个值），可包含 `species`、`coordinate_system`、`position_unit`。位置单位为 `m`、`km` 或 `Rm`，可通过 `--position-unit` 指定。
-- 只有 PSD 或终点的文件不包含完整轨迹，需要在追踪时另存路径。
+- MarsTP JLD2 batches: `p<ID>/state` is N×7 through h5py, with t,x,y,z,vx,vy,vz in s, m and m/s. HDF5 files with the same layout are supported. Increasing and decreasing time sequences are retained for forward and backward paths.
+- JSONL: each object requires `id`, N×3 `points`, and N `times_s` values. Optional fields include `species`, `coordinate_system` and `position_unit`. Position units are `m`, `km` or `Rm`, optionally specified with `--position-unit`.
+- PSD-only or endpoint-only files cannot reconstruct full paths; save trajectories during integration.
 
-默认 Rm=3,390,000 m，可用 `--rm-m` 修改。最终绘图坐标统一为 Rm。JLD2 只读取被抽中的轨迹及显示点，不将全部轨迹状态装入内存。
+The default Mars radius is 3,390,000 m, configurable with `--rm-m`. Plot coordinates use Rm. For JLD2, only selected trajectories and display points are read into memory.
 
-### Python 调用
+### Python interface
 
 ```python
 import sys
@@ -41,28 +41,28 @@ fig, axes, records = plot_trajectory(
     planes=("XZ", "3D"), output="outputs/trajectory.png")
 ```
 
-## 火星、BS 和 MPB
+## Mars, BS and MPB
 
-`plot_mars` 在二维坐标轴默认使用随仓库附带的 [火星图片](mars_globe_true_color.png)，无需安装 `py_space_zc` 或指定图片路径。图片来自用户提供的 `py_space_zc.maven` 本地资源，文件原样复制。使用 `texture=False` 可画纯色圆盘，`texture_path=...` 可指定自己的图片。
+In two dimensions, `plot_mars` defaults to the bundled [Mars image](mars_globe_true_color.png). No image path is required. This image was copied unchanged from the user-provided local `py_space_zc.maven` resource. Use `texture=False` for a solid disk or `texture_path=...` for a custom image.
 
-三维坐标轴默认绘制球体。这张图片是火星圆盘照片，不是经纬度展开的全球纹理，因此不直接贴到三维球面。
+Three-dimensional axes display a sphere. The bundled disk photograph is not a global longitude/latitude texture and is not wrapped onto the sphere.
 
-`bs_mpb` 使用与 `py_space_zc.maven.bs_mpb` 相同的圆锥曲线参数。x、ρ、r、x₀、L 均以 Rm 表示，θ 为 rad，偏心率 ε 无量纲：
+`bs_mpb` uses the same conic parameters as `py_space_zc.maven.bs_mpb`. Let x,ρ,r,x₀,L be in Rm, θ in rad and eccentricity ε dimensionless:
 
 $$
 r=\frac{L}{1+\epsilon\cos\theta},\qquad
 x=x_0+r\cos\theta,\qquad \rho=r\sin\theta.
 $$
 
-| 边界 | x₀ (Rm) | L (Rm) | ε | 区域 |
+| Boundary | x₀ (Rm) | L (Rm) | ε | Region |
 | --- | ---: | ---: | ---: | --- |
-| BS | 0.600 | 2.081 | 1.026 | 全部 |
-| MPB 日侧 | 0.640 | 1.080 | 0.770 | x≥0 |
-| MPB 夜侧 | 1.600 | 0.528 | 1.009 | x<0 |
+| BS | 0.600 | 2.081 | 1.026 | All |
+| Dayside MPB | 0.640 | 1.080 | 0.770 | x≥0 |
+| Nightside MPB | 1.600 | 0.528 | 1.009 | x<0 |
 
-只使用正半径分支。三维图绕 X 轴旋转生成边界曲面，XY、XZ 绘制对称截线。YZ 可用 `--x-slice 0` 显示 X=0 Rm 的边界截面，默认不画 YZ 边界。
+Only positive-radius branches are used. Rotation about X generates the three-dimensional surfaces; XY and XZ show symmetric sections. For YZ, `--x-slice 0` displays the boundary section at X=0 Rm. No YZ boundary is drawn by default.
 
-模型假设 +X 向阳。若数据坐标不符合该约定，使用 `--no-boundaries`，或先转换轨迹坐标。
+The model assumes +X sunward. For other coordinate conventions, transform positions first or use `--no-boundaries`.
 
 ```python
 import matplotlib.pyplot as plt

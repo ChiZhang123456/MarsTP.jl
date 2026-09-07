@@ -162,6 +162,6 @@ quadrature, crossing treatment, unit table, background assumptions and limits.
 Run `julia --project=. test/runtests.jl` for analytic tests and
 `julia --project=. scripts/smoke_ionosphere.jl` for the local MHD smoke test.
 
-## 轨迹可视化
+## Trajectory visualization
 
-[src/visualization](src/visualization/README.md) 提供独立 Python 火星、BS/MPB 与二维/三维轨迹绘图，支持从 forward/backward 轨迹文件按物种和粒子 ID 筛选。
+[src/visualization](src/visualization/README.md) provides standalone Python plots of Mars, BS/MPB and two- or three-dimensional trajectories, with species and particle-ID selection from forward or backward trajectory files.

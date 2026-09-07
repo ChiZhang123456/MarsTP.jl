@@ -1,278 +1,219 @@
-# O₂⁺ backtracing：体积源与电离层薄层面源的推导和单位
+# O₂⁺ backtracing: volume and thin-shell sources
 
-本文对应 `src/tracing/detector_psd_backward.jl` 的 `thin_shell_source_v1` 模型。它取代此前“到达电离层高度即施加边界分布并终止”的模型。电离层现在是一层可穿越的面源，**默认离地 400 km；吸收内边界始终位于离地 200 km**。
+This derivation describes `thin_shell_source_v1` in `src/tracing/detector_psd_backward.jl`. The ionosphere is a traversable source surface, normally at 400 km altitude. The absorbing inner boundary remains at 200 km.
 
-## 1. 模型、位置与粒子定义
+## 1. Model and coordinates
 
-使用静态 MHD 电磁场，积分非相对论 O₂⁺ 的洛伦兹运动。质量和正电荷取自项目实际 TestParticle `SpeciesDict["O2+"]`，不手写近似质量。位置、速度均为笛卡尔分量，MHD 球网格使用火心距离、余纬和方位角。
+Nonrelativistic O₂⁺ trajectories evolve in static MHD electromagnetic fields. Mass and positive charge come from TestParticle `SpeciesDict["O2+"]`. Positions and velocities use Cartesian components; the MHD spherical grid uses radius, colatitude and azimuth.
 
-设火星半径 $R_M=3.390\times10^6\ \mathrm{m}$，火心距离 $r=|\mathbf x|$，离地高度 $h=r-R_M$。积分域为
-
-$$
-r_{\rm in}=R_M+200\times10^3\ \mathrm{m},\qquad r_{\rm out}=4R_M.
-$$
-
-电离层薄层半径为
+Let R_M=3.390×10⁶ m, r=|x| in m and altitude h=r−R_M in m. The inner and outer radii and source radius are in m:
 
 $$
-r_s=R_M+h_s,\qquad h_s=400\times10^3\ \mathrm{m}\quad\text{（默认）}.
+r_{\rm in}=R_M+200\times10^3\ \mathrm{m},\qquad r_{\rm out}=4R_M,
+\qquad r_s=R_M+h_s,\qquad h_s=400\times10^3\ \mathrm{m}.
 $$
 
-`ionosphere_altitude_km` 仍允许 200 至 800 km；改变它不改变内边界。体积源在整个有效积分域内存在，包括 200 至 400 km；面源仅在 $r=r_s$ 处存在。300 km 处的局地产生项只有体积源，但是该处的累计 PSD 仍可能包含轨迹曾穿越 400 km 时产生的粒子。
+`ionosphere_altitude_km` accepts 200 to 800 km without changing the inner boundary. Volume production exists throughout the integration domain, including below the source shell. Surface production exists only at r=r_s. A particle observed at 300 km can nevertheless carry a contribution from an earlier 400 km crossing.
 
-当前模型不包含碰撞、损失、重力、化学反馈、粒子自洽电磁场或时间变化源。没有将各高度的出流率再次映射到 400 km。
+The model omits collisions, losses, gravity, chemical feedback, self-consistent particle fields and time-varying sources. Outflow rates at different heights are not remapped to 400 km.
 
-## 2. 相空间密度的定义与单位
+## 2. Definitions and units
 
-这里使用速度空间分布 $f$，不是动量空间分布，也不是能量谱：
+| Quantity | Definition | SI unit |
+| --- | --- | --- |
+| x, r, R_M | Position or Mars-centered radius | m |
+| t, Δt | Physical time and step | s |
+| v | Instantaneous particle velocity | m s⁻¹ |
+| U_i | MHD O₂⁺ bulk velocity | m s⁻¹ |
+| E, B | Electric and magnetic fields | V m⁻¹, T |
+| n_i | MHD O₂⁺ number density | m⁻³ |
+| T_i, T_n | Ion and neutral temperatures | K |
+| m_i, q_i | Particle mass and charge | kg, C |
+| Q_V | Volume production rate | m⁻³ s⁻¹ |
+| F_s | Surface production rate | m⁻² s⁻¹ |
+| g_V, g_M | Normalized three-dimensional velocity densities | s³ m⁻³ |
+| δ(r−r_s) | Radial Dirac delta | m⁻¹ |
+| S_V, S_s | Phase-space production rates | s² m⁻⁶ |
+| f, f_V, f_s | Velocity-space PSD | s³ m⁻⁶ |
+| f_xz | Distribution integrated over v_y | s² m⁻⁵ |
+
+Particle number dN is a dimensionless count. Using x in m, v in m/s, n in m⁻³ and f in s³ m⁻⁶:
 
 $$
-dN=f(\mathbf x,\mathbf v,t)\,d^3x\,d^3v,\qquad
-n(\mathbf x,t)=\int f(\mathbf x,\mathbf v,t)\,d^3v.
+dN=f(\mathbf x,\mathbf v,t)d^3x\,d^3v,\qquad
+n(\mathbf x,t)=\int f(\mathbf x,\mathbf v,t)d^3v.
 $$
 
-因此
+For nonrelativistic momentum p=m_i v, the velocity and momentum distributions obey f_v=m_i³f_p; their numerical values cannot be compared directly. `velocity_axes` converts km/s to m/s before integration. Display fluxes in cm⁻² s⁻¹ are obtained by dividing SI fluxes by 10⁴.
 
-$$
-[f]=\mathrm{m^{-3}(m\,s^{-1})^{-3}}=\boxed{\mathrm{s^3\,m^{-6}}}.
-$$
+## 3. Transport along characteristics
 
-粒子个数在量纲分析中视为无量纲。若文献用动量分布 $f_p$，非相对论条件下 $\mathbf p=m_i\mathbf v$，则 $f_v=m_i^3f_p$；二者不能直接比较数值。
-
-| 量 | 定义 | 内部 SI 单位 |
-|---|---|---|
-| $\mathbf x,r,R_M$ | 位置或火心距离 | m |
-| $t,\Delta t$ | 物理时间与积分步长 | s |
-| $\mathbf v$ | 被追踪粒子的瞬时速度 | m s⁻¹ |
-| $\mathbf U_i$ | MHD O₂⁺ 三维体速度 | m s⁻¹ |
-| $\mathbf E,\mathbf B$ | 电场与磁场 | V m⁻¹、T |
-| $n_i$ | MHD O₂⁺ 数密度 | m⁻³ |
-| $T_i,T_n$ | 离子温度与中性温度 | K |
-| $m_i,q_i$ | 粒子质量与电荷 | kg、C |
-| $Q_V$ | 单位体积、单位时间产生的粒子数 | m⁻³ s⁻¹ |
-| $F_s$ | 单位面积、单位时间产生的粒子数 | m⁻² s⁻¹ |
-| $g_V,g_M$ | 归一化三维速度概率密度 | s³ m⁻³ |
-| $\delta(r-r_s)$ | 径向 Dirac delta | m⁻¹ |
-| $S_V,S_s$ | 相空间产生项，即 $df/dt$ | s² m⁻⁶ |
-| $f,f_V,f_s$ | 三维速度空间 PSD | s³ m⁻⁶ |
-| $f_{xz}$ | 对 $v_y$ 积分后的二维 VDF | s² m⁻⁵ |
-
-`velocity_axes` 将 km/s 乘 $10^3$ 转成 m/s，再进行轨迹和源项计算。图中的 cm⁻² s⁻¹ 通量由 SI 通量除以 $10^4$ 得到，不直接输入积分器。
-
-## 3. 从输运方程到轨迹积分
-
-有源无损的相空间连续方程为
+Use the quantities and SI units above, with acceleration a in m/s². The source-driven, lossless phase-space continuity equation is:
 
 $$
 \frac{\partial f}{\partial t}
 +\nabla_{\mathbf x}\cdot(\mathbf v f)
 +\nabla_{\mathbf v}\cdot(\mathbf a f)=S_V+S_s,
-\qquad
-\mathbf a=\frac{q_i}{m_i}(\mathbf E+\mathbf v\times\mathbf B).
+\qquad \mathbf a=\frac{q_i}{m_i}(\mathbf E+\mathbf v\times\mathbf B).
 $$
 
-洛伦兹运动满足 $\nabla_{\mathbf x}\cdot\mathbf v=0$ 与 $\nabla_{\mathbf v}\cdot\mathbf a=0$，因此沿同一条特征轨迹
+Lorentz flow has zero phase-space divergence. With x in m, v in m/s, a in m/s² and source terms in s² m⁻⁶, the characteristic equations are:
 
 $$
-\dot{\mathbf x}=\mathbf v,\qquad
-\dot{\mathbf v}=\mathbf a,\qquad
+\dot{\mathbf x}=\mathbf v,\qquad \dot{\mathbf v}=\mathbf a,\qquad
 \frac{df}{dt}=S_V[\mathbf x(t),\mathbf v(t)]+S_s[\mathbf x(t),\mathbf v(t)].
 $$
 
-取探头观测时刻 $t_0=0$，从指定 $(\mathbf x_0,\mathbf v_0)$ 反向积分到 $t_*<0$：
+Let observation time t_0=0 and past endpoint t_*<0 be in s, with f in s³ m⁻⁶ and S_V,S_s in s² m⁻⁶:
 
 $$
-f(\mathbf x_0,\mathbf v_0,0)
-=f[\mathbf x(t_*),\mathbf v(t_*),t_*]
+f(\mathbf x_0,\mathbf v_0,0)=f[\mathbf x(t_*),\mathbf v(t_*),t_*]
 +\int_{t_*}^{0}(S_V+S_s)\,dt.
 $$
 
-当前代码设置过去端点的外加背景分布为零，所以返回的是本次回溯窗口内的源项贡献。到达 200 km 或 $4R_M$ 时终止；到达回溯时限时也终止，但该结果是截断时间窗内的累计值，不自动等于稳态解。现有代码不提供外边界注入的非零背景 VDF。
+The implementation sets the imposed past-endpoint background to zero. It terminates at 200 km, 4R_M or the lookback limit. A time-limited answer is a truncated source integral, not automatically a steady-state solution. Nonzero external-boundary background VDFs are not provided.
 
-实现使用负时间步长，质量、电荷及物理速度符号均不变。定义回溯时长 $\tau=-t\ge0$，源积分也可写为 $\int_0^{\tau_*}S[\mathbf x(-\tau),\mathbf v(-\tau)]d\tau$。这解释了代码累计源项时使用 $|\Delta t|$，无需把正源项取负。
+Negative time steps implement backtracing without reversing mass, charge or physical velocity. Defining positive lookback age τ=−t expresses the source integral over increasing τ. This is why positive production accumulates with |Δt|.
 
-## 4. 体积产生项
+## 4. Volume production
 
-现有 MAT 数据提供
-
-$$
-Q_V(\mathbf x)\quad[\mathrm{m^{-3}s^{-1}}].
-$$
-
-该量本身不是 PSD。新生粒子的归一化速度分布为
+Q_V(x) from MAT inputs has units m⁻³ s⁻¹. Let T_n be GITM neutral temperature in K, k_B the Boltzmann constant in J/K, m_i mass in kg and w_n speed in m/s. The normalized birth density g_V has units s³ m⁻³:
 
 $$
-g_V(\mathbf v;\mathbf x)
-=\frac{1}{\pi^{3/2}w_n^3}
+g_V(\mathbf v;\mathbf x)=\frac{1}{\pi^{3/2}w_n^3}
 \exp\left(-\frac{|\mathbf v|^2}{w_n^2}\right),\qquad
-w_n=\sqrt{\frac{2k_BT_n(\mathbf x)}{m_i}},\qquad
-\int g_Vd^3v=1.
+w_n=\sqrt{\frac{2k_BT_n(\mathbf x)}{m_i}},\qquad \int g_Vd^3v=1.
 $$
 
-这里保留原模型：$T_n$ 来自 GITM，体积产生粒子的漂移速度为零。这与薄层使用 MHD 的 $T_i,\mathbf U_i$ 是两个不同的出生分布，不能混淆。
+The volume source uses zero drift and neutral temperature, whereas the shell uses MHD ion temperature and bulk velocity.
+
+With Q_V in m⁻³ s⁻¹, g_V in s³ m⁻³, S_V in s² m⁻⁶, time in s and f_V in s³ m⁻⁶:
 
 $$
-S_V=Q_Vg_V,
-\qquad [S_V]=(\mathrm{m^{-3}s^{-1}})(\mathrm{s^3m^{-3}})=\mathrm{s^2m^{-6}},
+S_V=Q_Vg_V,\qquad
+\boxed{f_V=\int_{t_*}^{0}Q_V[\mathbf x(t)]g_V[\mathbf v(t);\mathbf x(t)]dt}.
 $$
 
-$$
-\boxed{f_V=\int_{t_*}^{0}Q_V[\mathbf x(t)]\,g_V[\mathbf v(t);\mathbf x(t)]\,dt}.
-$$
+The distribution is evaluated at the instantaneous trajectory velocity. The integration variable is time; no additional speed or grid-volume factor is needed.
 
-$[f_V]=\mathrm{s^3m^{-6}}$。速度参数是每个轨迹点的瞬时速度，不是始终使用探头的初始速度。积分变量是时间，不是距离，不再乘速度或网格体积。
+## 5. MHD surface production and birth velocities
 
-## 5. MHD 薄层面产生率与速度分布
-
-在 $r_s$ 球面上插值读取 MHD O₂⁺：
-
-- `n_O^2^p [m^-3]`，得到 $n_i$；
-- `T_O^2^p [K]`，得到 $T_i$；
-- `U_O^2^p [m/s]`，得到笛卡尔向量 $\mathbf U_i$。
-
-按本项目约定，面产生率为
+The shell samples `n_O^2^p [m^-3]`, `T_O^2^p [K]` and `U_O^2^p [m/s]`. Let Ω represent angular location, n_i density in m⁻³, U_i velocity in m/s and F_s surface production in m⁻² s⁻¹:
 
 $$
-\boxed{F_s(\Omega)=n_i(r_s,\Omega)|\mathbf U_i(r_s,\Omega)|},\qquad
-[F_s]=\mathrm{m^{-2}s^{-1}}.
+\boxed{F_s(\Omega)=n_i(r_s,\Omega)|\mathbf U_i(r_s,\Omega)|}.
 $$
 
-这是一项模型处方，不是有符号的球面法向流量 $n_i\mathbf U_i\cdot\hat{\mathbf r}$，也不是麦氏分布积分得到的单向热通量。它把 MHD 局地矩转换成独立面源强度，不能据此声称 MHD 本身给出了独立的粒子出生率。
+This is a source prescription, distinct from signed normal flux or an integrated one-sided thermal flux. It converts local moments into an assumed independent surface source. It does not imply that MHD directly provides an independent birth rate.
 
-归一化漂移麦氏分布为
+Let T_i be in K, m_i in kg, k_B in J/K, and v,U_i,w_i in m/s. The normalized drifting Maxwellian g_M has units s³ m⁻³:
 
 $$
-g_M(\mathbf v;\Omega)
-=\frac{1}{\pi^{3/2}w_i^3}
+g_M(\mathbf v;\Omega)=\frac{1}{\pi^{3/2}w_i^3}
 \exp\left[-\frac{|\mathbf v-\mathbf U_i|^2}{w_i^2}\right],\qquad
 w_i=\sqrt{\frac{2k_BT_i}{m_i}},\qquad \int g_Md^3v=1.
 $$
 
-此处 $g_M$ **不含密度因子**；密度已经进入 $F_s$。`ionosphere_distribution` 同时返回 `g=g_M` 与 `f=n_i*g_M`，面源计算只使用 `flux*g`，不使用 `flux*f`，从而避免重复乘密度。
+The density factor is already in F_s. `ionosphere_distribution` returns both `g=g_M` and `f=n_i*g_M`; the shell uses `flux*g` to avoid double-counting density.
 
-当前使用完整三维麦氏分布，不裁剪速度半空间。因此向内、向外两类穿越均可贡献；若以后要求只发射向外粒子，需要重新定义并归一化速度分布，不能简单删除一半积分。
+The full three-dimensional Maxwellian includes both inward and outward velocities. Restricting emission to outward directions would require a redefined normalized distribution. This thin-shell prescription differs from the reservoir-crossing source used in the forward Monte Carlo example.
 
-## 6. 为什么薄层贡献要除以粒子的径向速度
+## 6. Radial velocity in the shell contribution
 
-把面源写成三维空间中的体源：
+Let F_s be in m⁻² s⁻¹, g_M in s³ m⁻³ and the radial delta in m⁻¹. The shell phase-space source S_s is in s² m⁻⁶:
 
 $$
 S_s(\mathbf x,\mathbf v)=F_s(\Omega)g_M(\mathbf v;\Omega)\delta(r-r_s).
 $$
 
-单位为
-
-$$
-[S_s]=(\mathrm{m^{-2}s^{-1}})(\mathrm{s^3m^{-3}})(\mathrm{m^{-1}})
-=\mathrm{s^2m^{-6}}.
-$$
-
-对于球面有 $|\nabla(r-r_s)|=1$，且
+With d³x in m³, area dA and r_s² in m², solid angle dΩ dimensionless and F_s in m⁻² s⁻¹, integrating over space gives a rate in s⁻¹:
 
 $$
 \int F_s\delta(r-r_s)d^3x=\int F_s r_s^2d\Omega=\int F_s dA.
 $$
 
-因此源项中不需要再放一个 $r_s^2$ 或面元面积；几何面积已经由空间体积元与 delta 函数体现。
+Area is already represented by the spatial measure and delta function; no extra r_s² belongs in S_s.
 
-设轨迹在 $t_j$ 横穿薄层，即 $r(t_j)=r_s$ 且 $\dot r(t_j)\ne0$。利用一维 delta 的变量代换：
+Let t_j be a transverse crossing time in s, r in m, v in m/s and r̂_j a dimensionless radial unit vector. With δ(t−t_j) in s⁻¹ and dr/dt in m/s:
 
 $$
-\delta[r(t)-r_s]
-=\sum_j\frac{\delta(t-t_j)}{|\dot r(t_j)|},\qquad
+\delta[r(t)-r_s]=\sum_j\frac{\delta(t-t_j)}{|\dot r(t_j)|},\qquad
 \dot r(t_j)=\mathbf v(t_j)\cdot\hat{\mathbf r}_j.
 $$
 
-于是
+Using F_s in m⁻² s⁻¹, g_M in s³ m⁻³ and radial speed in m/s, the shell PSD f_s is in s³ m⁻⁶:
 
 $$
-\boxed{
-f_s=\sum_j\frac{F_s(\Omega_j)g_M[\mathbf v(t_j);\Omega_j]}
-{|\mathbf v(t_j)\cdot\hat{\mathbf r}_j|}
-}.
+\boxed{f_s=\sum_j\frac{F_s(\Omega_j)g_M[\mathbf v(t_j);\Omega_j]}
+{|\mathbf v(t_j)\cdot\hat{\mathbf r}_j|}}.
 $$
 
-每次穿越贡献的单位为
+The denominator is the instantaneous test-particle radial speed, not the MHD radial bulk speed. It describes crossing residence geometry and does not change the definition F_s=n_i|U_i|. Repeated transverse crossings add independently, shared step endpoints count once, and the source shell neither changes particle velocity nor terminates the trajectory.
+
+## 7. Total PSD and integrated output
+
+With zero imposed background, let f,f_V,f_s have units s³ m⁻⁶. Their source terms and velocities retain the units above:
 
 $$
-[\Delta f_s]
-=\frac{(\mathrm{m^{-2}s^{-1}})(\mathrm{s^3m^{-3}})}{\mathrm{m\,s^{-1}}}
-=\boxed{\mathrm{s^3m^{-6}}}.
-$$
-
-分母使用的是**测试粒子的瞬时径向速度**，不是 MHD 的径向体速度。这一因子来自粒子穿过薄层的停留时间几何关系，并不改变 $F_s=n_i|\mathbf U_i|$ 的定义。
-
-如果同一条轨迹再次穿越该层，每次横穿都独立累计，不覆盖之前的结果。跨步共享端点仅算一次。源层不会改变粒子速度或电荷，也不终止轨迹。
-
-## 7. 总 PSD 与代码实际输出
-
-零外加背景条件下，探头处每个速度点的三维 PSD 为
-
-$$
-\boxed{
-f(\mathbf x_0,\mathbf v_0)
-=\int_{t_*}^{0}Q_V[\mathbf x(t)]g_V[\mathbf v(t);\mathbf x(t)]dt
+\boxed{f(\mathbf x_0,\mathbf v_0)=
+\int_{t_*}^{0}Q_V[\mathbf x(t)]g_V[\mathbf v(t);\mathbf x(t)]dt
 +\sum_j\frac{n_i(\Omega_j)|\mathbf U_i(\Omega_j)|g_M[\mathbf v(t_j);\Omega_j]}
-{|\mathbf v(t_j)\cdot\hat{\mathbf r}_j|}
-}.
+{|\mathbf v(t_j)\cdot\hat{\mathbf r}_j|}}.
 $$
 
-随后代码对探头速度网格的 $v_y$ 做矩形求和：
+Let f be in s³ m⁻⁶ and v_y,Δv_y in m/s. The integrated VDF f_xz is in s² m⁻⁵:
 
 $$
 f_{xz}(v_x,v_z)=\int f(v_x,v_y,v_z)dv_y
-\simeq\sum_{\ell}f(v_x,v_{y,\ell},v_z)\Delta v_y.
+\simeq\sum_\ell f(v_x,v_{y,\ell},v_z)\Delta v_y.
 $$
 
-$$
-[f_{xz}]=(\mathrm{s^3m^{-6}})(\mathrm{m\,s^{-1}})
-=\boxed{\mathrm{s^2m^{-5}}}.
-$$
+| Output | Meaning | Unit |
+| --- | --- | --- |
+| `f2d_volume` | Integrated volume contribution | s² m⁻⁵ |
+| `f2d_ionosphere` | Integrated shell contribution | s² m⁻⁵ |
+| `f2d_xz` | Sum of both terms | s² m⁻⁵ |
+| `ionosphere_crossings` | Sum of crossing counts over sampled Vy at each (vx,vz) | Count, without Δv_y |
+| `vx_km,vy_km,vz_km` | Detector velocity grid | km/s |
+| `model` | `thin_shell_source_v1` | Identifier |
+| `source_units` | Source and PSD unit dictionary | Strings |
 
-| 输出字段 | 内容 | 单位 |
-|---|---|---|
-| `f2d_volume` | $\sum_\ell f_V\Delta v_y$ | s² m⁻⁵ |
-| `f2d_ionosphere` | $\sum_\ell f_s\Delta v_y$ | s² m⁻⁵ |
-| `f2d_xz` | 上述两项之和 | s² m⁻⁵ |
-| `ionosphere_crossings` | 每个 $(v_x,v_z)$ 格点所有已计算 Vy 轨迹的穿层次数之和 | 无量纲计数，不乘 $\Delta v_y$ |
-| `vx_km,vy_km,vz_km` | 探头速度网格 | km/s |
-| `model` | `thin_shell_source_v1` | 模型标识 |
-| `source_units` | 内部各类源项和 PSD 的单位字典 | 字符串 |
+Even a single Vy point is multiplied by `dvy_kms*1000`, representing a rectangular integral over that width rather than a three-dimensional slice. Density requires integration over vx and vz and checks of velocity coverage and resolution. The output is not differential flux per eV.
 
-即使只设置一个 Vy 网格点，代码也会乘 `dvy_kms*1000`，此时输出表示该速度宽度的矩形近似，**不是**三维 PSD 的切片。恢复数密度还需要对 $v_x,v_z$ 做积分，并验证速度网格覆盖范围和分辨率。输出不是每单位 eV 的微分通量。
+## 8. Discrete implementation
 
-## 8. 离散实现与边界处理
+1. Trace the detector state backward in SI units with Boris or AdaptiveBoris.
+2. Clip each step at the 200 km or 4R_M boundary.
+3. Find all intersections of the valid position segment with the source sphere, in time order.
+4. Synchronize the Boris half-step velocity at each intersection and evaluate the shell contribution.
+5. Integrate the volume source over pieces separated by crossings and the valid endpoint.
 
-1. 在 SI 单位下从探头状态使用负时间步长运行 Boris 或 AdaptiveBoris。
-2. 逐步检查是否穿过 200 km 内边界或 $4R_M$ 外边界，截取该步的有效部分。
-3. 对这段位置线段求与薄层球面的交点，按时间顺序处理所有交点。
-4. 在每个交点同步 Boris 的半步速度，再评估 $F_sg_M/|v_r|$。
-5. 在交点及有效段末端分段计算体积源梯形积分：
+For S_V in s² m⁻⁶ and t in s, the trapezoidal increment Δf_V is in s³ m⁻⁶:
 
 $$
-\Delta f_V\simeq\frac{S_{V,k}+S_{V,k+1}}{2}|t_{k+1}-t_k|.
+\Delta f_V\simeq\frac{S_{V,k}+S_{V,k+1}}2|t_{k+1}-t_k|.
 $$
 
-6. 穿层后继续至 200 km、外边界或回溯时限。400 km 以下不重复添加薄层项，但仍累计体积源。
-7. 分别累计三维 PSD 的两类贡献，再对 Vy 做积分并保存。
+6. Continue to a boundary or time limit, accumulating volume production below the shell as well.
+7. Accumulate the two three-dimensional contributions separately, then integrate over Vy.
 
-求交使用位置线段近似，交点速度由同一 Boris 步的交错速度同步得到，仍存在有限步长误差。一步内的真实曲线可能多次穿层，而线段近似无法完全解析，因此必须做步长收敛检查。代码不在场域外求值。边界附近 1e-8 m 的偏移只用于避免浮点舍入出界。
+Intersections use straight position segments and synchronized velocities from the same Boris step. Curved paths and multiple unresolved crossings introduce finite-step error. Fields are never evaluated outside the domain; 1e-8 m offsets near boundaries only avoid roundoff errors.
 
-状态计数索引依次为：1 保留未使用，2 达到时限，3 到达 200 km，4 非有限轨迹，5 到达外边界。穿过 400 km 不属于终止状态。非有限轨迹的已累计部分可能仍在输出中，必须检查 `status_counts[4]==0` 后再用于完整科学分析。无效源项或 MHD 矩会报错，不替换为零。
+Status indices are 1=unused, 2=time limit, 3=200 km boundary, 4=nonfinite path, 5=outer boundary. A shell crossing is not termination. Partial accumulations from nonfinite paths may remain in output; check `status_counts[4]==0` before scientific use. Invalid source values or moments raise errors.
 
-## 9. 零厚度模型的限制
+## 9. Zero-thickness limitations
 
-当 $|v_r|\to0$ 时，面源 PSD 可能变大；严格切向事件不满足上述 delta 代换的简单根条件。代码不会使用任意最小速度去截断分母。数值上，若 $|v_r|\le\sqrt{\epsilon_{64}}\max(|\mathbf v|,1\ \mathrm{m\,s^{-1}})$，或线段求交判为不可分辨切向事件，将报错。该阈值是拒绝无法解析事件的数值判据，不是物理正则化。
+Shell PSD can grow as radial speed approaches zero. Exact tangency violates the simple-root delta transformation. The implementation does not impose an arbitrary minimum physical radial speed. It rejects unresolved tangencies or radial speeds below `sqrt(eps(Float64))*max(norm(v),1 m/s)`.
 
-探头恰好位于零厚度源面上也会被拒绝，避免初始时刻源项的单侧归属歧义。源高为 200 km 时，按源面从域内趋近吸收边界的单侧极限约定，在终止交点计入一次完整横穿权重。
+A detector exactly on the source shell is rejected because of ambiguous initial-time attribution. At a source altitude of 200 km, the code uses the one-sided limit from inside the domain and counts one full crossing at the absorbing boundary.
 
-若必须研究切向轨迹，需另行指定有限层厚 $\Delta r$ 与归一化径向剖面 $W(r)$，其中 $\int Wdr=1$、$[W]=\mathrm{m^{-1}}$，再计算 $\int F_sg_MW[r(t)]dt$。当前实现未加入这个额外物理参数。
+A finite-thickness treatment would require a specified thickness and normalized radial profile W(r), in m⁻¹, satisfying an integral of one over radius. That additional physical model is not implemented.
 
-300 km 的局部面源严格为零，但从 300 km 开始反向向外运动的轨迹可能穿过 400 km，从而取得面源贡献。这是沿特征线累计源项的结果，不是把 400 km 面源涂抹到所有高度。
+Local surface production at 300 km is zero, while a backtraced path from there can cross 400 km and acquire a source contribution. This is accumulation along characteristics, not spatial spreading of the shell.
 
-MHD 的某些极点包含近零但有限的矩值；分布图的南极遮罩只是绘图处理，不会自动应用到输运计算。模型还假定所选面源与 MAT 体积源可相加，未自动去除潜在的物理来源重叠。研究总体产生率时需要独立核实这项假设。
+Some MHD pole moments are nearly zero but finite. Plot masks do not modify transport inputs. The model adds MAT volume production and the shell source without automatically removing physical overlap; this assumption needs independent assessment for total-production studies.
 
-## 10. 运行与验证
+## 10. Run
 
 ```julia
 using MarsTP, StaticArrays
@@ -290,16 +231,13 @@ cfg = BacktraceConfig(
 result = run_backtrace_vdf(cfg)
 ```
 
-上述速度范围仅为小规模示例，不能视为已经收敛的科学 VDF。运行前准备项目 Julia 环境及 MHD、源率和 GITM 输入。软件不会自动安装依赖。输出路径可以在配置中另行指定，以保留不同高度和步长的结果。
+This small velocity range illustrates the interface, not a converged scientific VDF. Prepare the Julia project, MHD, source-rate and GITM inputs. Use distinct output paths for different configurations.
 
 ```sh
 julia --project=. test/runtests.jl
 julia --project=. scripts/smoke_ionosphere.jl
 ```
 
-自动测试覆盖密度与速度 PDF 的区分、通量单位、200/400/800 km 源面与固定 200 km 内边界、400 km 以下的体积源、反向向外穿层、斜向两次穿层、共享端点去重、切向拒绝、Boris 速度同步和步长减半。真实 MHD 小规模测试另行检查穿层后继续前进及非零面源贡献。理论推导不替代时间步长、速度网格和回溯时限的收敛检验。
+Tests cover density/PDF distinctions, flux units, 200/400/800 km shells, the fixed inner boundary, sub-shell volume production, outward backtraced crossings, two-crossing geometry, shared endpoints, tangencies, synchronized velocities and step halving. They do not replace velocity-grid and lookback-time convergence checks.
 
-
-### 本次执行记录
-
-Julia 1.12.6、TestParticle 0.23.3 下，项目测试共 **122 项通过**。实际 MHD 单粒子测试从 `(1.12 Rm, 0, 0)`、初始速度 `(10, 0, 0) km/s` 出发，源层为 400 km，步长 −0.05 s，回溯 2 s。轨迹穿层后继续运行至时限，未在 400 km 停止；面源的 Vy 积分贡献为约 `1.17466e-5 s^2 m^-5`，此处仅一个 Vy 点，速度宽度为 1 km/s。该数值是端到端运行检查，不是已收敛的观测预测。
+The original Julia 1.12.6/TestParticle 0.23.3 validation passed 122 tests. A two-second MHD trajectory starting at (1.12 Rm,0,0) with velocity (10,0,0) km/s and dt=−0.05 s crossed the 400 km shell and continued to the time limit. Its shell contribution integrated over a single 1 km/s Vy width was about 1.17466e-5 s² m⁻⁵, an execution check rather than a converged prediction.

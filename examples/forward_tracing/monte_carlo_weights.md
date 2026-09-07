@@ -5,7 +5,7 @@ The original file supplies weights, not random draws or a transport solver.
 MarsTP adds `sample_maxwellian_source`; default particle mass is O2+, not H.
 Existing untracked shell Monte Carlo scripts are independent and unchanged.
 
-For physical temperature T, proposal temperature Ts=c*T and bulk velocity U,
+For physical temperature T, sampling Maxwellian temperature Ts=c*T and bulk velocity U,
 each Cartesian velocity component is sampled as U_k+sqrt(e*Ts/m)*randn().
 Temperatures here mean kT/e in eV; convert input Kelvin using kB*T/e.
 All three components are in the same Cartesian frame as the fields.
@@ -33,7 +33,7 @@ For an explicitly specified patch area A and outward unit normal er:
 
     rate_weights_s[i] = n*A*max(dot(v_i,er),0)*w_i/N  [s^-1]
 
-N is the total number of proposal draws, including inward ones. Inward draws
+N is the total number of Maxwellian draws, including inward ones. Inward draws
 have zero rate; filter using their indices and retain the corresponding
 weights. Do not renormalize by the number of retained particles. Sum these
 weights to estimate the outward source rate of this patch. This estimator
@@ -54,7 +54,7 @@ estimate escape rate [s^-1], counting each injected particle once. For a
 steady source, cell density is sum(rate_weight*residence_time)/cell_volume
 [m^-3]. Flux requires division by collecting area, and a velocity histogram
 VDF additionally requires the velocity-bin volume. No detector or escape
-quantity is produced by this sampler alone. Converge sample count, proposal
+quantity is produced by this sampler alone. Converge sample count, sampling
 temperature, timestep and termination settings before interpreting them.
 The sampler reports effective_sample_size = sum(w)^2/sum(w^2), dimensionless;
 it diagnoses velocity importance sampling, not uncertainty of escape flux.
@@ -65,3 +65,7 @@ invalid inputs, weighted second moments, and analytic zero-drift outward
 flux at sampling-temperature factors 1 and 4. No large trajectory simulation
 is part of these tests. No new external dependency is needed; Random is a
 Julia standard library.
+
+## Other velocity distributions
+
+Importance weighting uses the ratio of normalized physical and sampling velocity densities. The same principle and source-rate weighting can be applied to a κ distribution, provided the sampler covers its support and both densities are evaluated consistently. The temperature-rescaling exponential given above is specific to Maxwellians. A suitable heavy-tailed sampling distribution is generally preferable for κ tails. `sample_maxwellian_source` currently implements Maxwellian sampling only; a κ sampler requires additional implementation.

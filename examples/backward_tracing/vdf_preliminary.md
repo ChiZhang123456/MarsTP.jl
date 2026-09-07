@@ -1,13 +1,13 @@
-# 探头位置的 Vy 积分 VDF：初步计算
+# Preliminary Vy-integrated detector VDF
 
-位置 (0,0,2 Rm)，400 km 可穿越薄层面源，200 km 吸收内边界。计算 41×41×21=35301 条轨迹，对 Vy 进行矩形求和，dVy=20 km/s；输出 f_xz 的单位为 s² m⁻⁵，不是 Vy=0 的三维 PSD 切片，也不是轨迹计数直方图。
+The detector is at (0,0,2 Rm), with a traversable 400 km source surface and a 200 km absorbing boundary. The initial calculation uses 41×41×21=35,301 trajectories and rectangular integration over Vy with dVy=20 km/s. The output f_xz has units s² m⁻⁵.
 
-Vx、Vz 为 -200 至 200 km/s、间隔 10 km/s；Vy 为 -200 至 200 km/s；Boris 步长 -0.1 s，回溯上限 500 s。全部轨迹正常到达内/外边界，426 条内边界、34875 条外边界，无非有限轨迹或达到时限。
+Vx and Vz span −200 to 200 km/s at 10 km/s spacing; Vy spans the same range. The Boris step is −0.1 s and the maximum lookback time is 500 s. Of these trajectories, 426 reached the inner boundary and 34,875 reached the outer boundary, without nonfinite states or time limits.
 
-## 数值检查未收敛
+## Unconverged numerical checks
 
-对原网格五个高值点，用 Vy 间隔 20、10、5、2.5 km/s 和时间步长 0.1、0.05 s 比较。结果随 Vy 间隔显著变化，部分点对时间步长也敏感。因此图片仅用于查看首轮计算，不可把峰值、积分密度或形状作为收敛的科学结论。
+Five high-value points were compared using Vy spacings of 20, 10, 5 and 2.5 km/s and time steps of 0.1 and 0.05 s. Results vary strongly with Vy spacing, and some are sensitive to the time step. Peaks, integrated density and shape must not be treated as converged scientific results.
 
-例如 (Vx,Vz)=(0,0) km/s，步长 0.1 s 下，Vy 间隔从 20 降到 2.5 km/s，f_xz 从 5.877e-10 变为 7.346e-11 s² m⁻⁵。在 (10,150) km/s，2.5 km/s 网格发现更粗网格漏掉的贡献。这说明需要先解析窄 Vy 峰，再加密 Vx、Vz 和时间步长。五点检查中 |Vy|>200 至 300 km/s 的采样贡献数值为零，仅是这些点的检查，不构成完整尾部收敛证明。
+At (Vx,Vz)=(0,0) km/s and dt=0.1 s, decreasing Vy spacing from 20 to 2.5 km/s changes f_xz from 5.877e-10 to 7.346e-11 s² m⁻⁵. At (10,150) km/s, the 2.5 km/s grid captures a contribution missed by coarser grids. Narrow Vy peaks need to be resolved before refining Vx, Vz and time. Sampled contributions at |Vy| from 200 to 300 km/s were numerically zero at these five points only; this is not a full tail-convergence check.
 
-图采用 turbo 对数色标，不平滑、不插值填补；浅灰为数值零（可能包含麦氏尾部下溢），低于色标范围的正值为紫色。原始数值见 vdf.csv/JLD2，检查数据见 qa_refinement.csv。
+The figure uses turbo with logarithmic normalization, without smoothing or gap filling. Light gray denotes numerical zero, potentially including Maxwellian-tail underflow; positive values below the color range are purple. Numerical data are in vdf.csv/JLD2 and refinement results in qa_refinement.csv.

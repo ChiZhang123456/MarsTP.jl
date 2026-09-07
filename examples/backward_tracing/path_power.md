@@ -1,55 +1,53 @@
-# 沿反向轨迹的局部功率与累计做功
+# Local power and cumulative work along backtraced paths
 
-![路径功率](images/probe_path_power_xz_5000.png)
+![Path power](images/probe_path_power_xz_5000.png)
 
-两行三列分别显示对流、Hall、总电场对同一组轨迹的作用。第一行为局部功率（eV/s），第二行为累计做功（eV）。沿用原随机轨迹图的 5000 个 O2+ 初始速度，随机种子 20260905，速率均匀分布于 10 至 200 km/s，初始 Vy=0，方向在 XZ 平面均匀分布。探头为 (0,0,2 Rm)，Rm=3390 km。三维轨迹投影到 XZ，后续 Vy 不限制为零。坐标轴沿用原图的模型笛卡尔 X、Z，不额外假定未经输入元数据确认的坐标变换。
+Columns show convective, Hall and total electric-field contributions. The first row is local power (eV/s), and the second is cumulative work (eV). The example reuses 5000 O₂⁺ initial velocities: uniform speed from 10 to 200 km/s, uniform direction in XZ, initial Vy=0 and seed 20260905. The detector is at (0,0,2 Rm), with Rm=3390 km. Motion is three-dimensional; only its XZ projection is shown.
 
-## 颜色的物理意义
+## Local power
 
-```math
-P_j = q\mathbf E_j\cdot\mathbf v,\qquad j=\mathrm{conv,Hall,total}.
-```
+Charge q is in C, electric field E in V/m and velocity v in m/s. The following power is in J/s; divide by 1.602176634e-19 J/eV for eV/s:
 
-正值（红色）表示粒子沿正时间运动时局部增能，负值（蓝色）表示局部失能。磁力本身不做功。这里的加速/减速指速率或动能变化，不是加速度矢量大小。功率以 eV/s 表示，由 SI 的 q(C)、E(V/m)、v(m/s) 相乘后除以 1.602176634e-19 J/eV 得到。
+$$
+P_j=q\mathbf E_j\cdot\mathbf v,\qquad j=\mathrm{conv,Hall,total}.
+$$
 
-虽然用负 dt 回溯，仍用物理速度和正离子电荷计算功率，不把功率符号反转。每个下降时间段的正时间做功为 `-q*dot(E_mid,v_mid)*dt/e`。绘图每 0.5 s 保存一段，以该段正时间做功除以其持续时间显示平均功率，最后不足 0.5 s 的段使用实际持续时间。积分步长为 -0.05 s；做功在每个积分步累积，未用稀疏保存位置估算速度。
+Positive values (red) indicate energy gain in physical forward time; negative values (blue) indicate loss. The magnetic force does no work. Negative integration steps do not reverse the charge, physical velocity or power sign. For a backward step dt<0, physical forward-time work is `-q*dot(E_mid,v_mid)*dt`, converted from J to eV.
 
-配色为 coolwarm，使用 SymLogNorm，±1 eV/s 内线性，两侧以 10 为底对数，三个面板共用 ±1000 eV/s 范围。普通 LogNorm 不支持负功率。没有对空间进行分箱或插值，轨迹透明叠加会影响重叠区域的观感，不能把重叠区域解释为空间平均功率。边界曲线和火星使用 py_space_zc.maven.bs_mpb、plot_mars，延续原图。
+Work is accumulated at every −0.05 s integration step. Display segments span 0.5 s, with the actual duration used for the final partial segment. Their color is the segment work divided by duration. Velocity is not estimated from sparse saved positions.
 
-第一行是局部平均功率，和 [速度网格全路径净能量图](energy_gain.md) 的单位及含义不同。同一条轨迹可先增能再失能，净变化是功率沿正时间的积分。所有项都在总场产生的轨迹上评价，不是分别在三个不同场中重新运动。
+Coolwarm and SymLogNorm use a linear interval of ±1 eV/s and logarithmic scaling outside it, shared across all three panels over ±1000 eV/s. Overlapping transparent paths are not spatial averages. Mars and boundaries use `src/visualization`.
 
-## 第二行：累计做功（eV）
+All field terms are evaluated along the same trajectory driven by the total field. Local power differs from the [net-energy map](energy_gain.md): a particle may gain and later lose energy along one path.
 
-设探头时刻为 0，回溯终点为 tb<0，沿路径位置的时刻为 t：
+## Cumulative work
 
-```math
+Let the detector time be 0, the past endpoint be t_b<0, and t be a time along the path, all in s. With q in C, E in V/m and v in m/s, C_j and ΔK_j below are in J (converted to eV for plotting):
+
+$$
 C_j(t)=\int_{t_b}^{t}q\mathbf E_j\cdot\mathbf v\,dt',\qquad
 C_j(t_b)=0,\qquad C_j(0)=\Delta K_j.
-```
+$$
 
-从过去的回溯终点沿正时间到探头累积。红色表示相对于该终点累计增能，蓝色表示累计失能；探头处为整条路径的净做功。积分起点是内/外边界或时间上限，不是沿途粒子产生的位置。
+Work accumulates from the past endpoint toward the detector. That endpoint is a boundary or time limit, not necessarily the particle's birthplace. The code saves B(t), the forward-time work accumulated while integrating backward from the detector, then uses `C(t)=DeltaK-B(t)`. Each segment is colored by the mean of its endpoint C values.
 
-计算时保存从探头向过去累计的正时间做功 B(t)，然后使用 `C(t)=DeltaK-B(t)`。每条显示段的颜色取两端 C 的均值；因此贴近起终点的段颜色并不等于端点值本身。数值检查要求每粒子回溯终点的 C 为零，探头的 C 等于逐粒子总做功。总电场 C(0) 还与探头动能减去回溯终点动能对照。
+The second row uses coolwarm and SymLogNorm, linear within ±1 eV. Its three panels share a color range, independently of the first row. Signed values are retained. Exact per-particle totals are in `particles.csv`.
 
-第二行也使用 coolwarm 和 SymLogNorm，±1 eV 内线性，两侧以 10 为底对数，三个场项共享第二行色标。两行量纲不同，分别使用自己的色标范围。累计值保留符号，没有取绝对值。每粒子准确的最终数值仍保存在 particles.csv，而不是从透明叠加的颜色反读。
+## Run
 
-## 运行
-
-从仓库根目录运行，复用已安装的 Julia 项目环境以及 Python 的 NumPy、Matplotlib、py_space_zc 和 Arial：
+Use the project Julia environment and Python with NumPy, Matplotlib, h5py and Arial:
 
 ```sh
 julia --startup-file=no --compiled-modules=existing --threads=1 --project=. examples/backward_tracing/probe_path_power.jl outputs/path_power_new_run 5000
 python examples/backward_tracing/plot_path_power.py outputs/path_power_new_run
 ```
 
-将 5000 改为 3 可运行小样本。原位置输出不含速度，因此本例从相同初始条件重新积分。保留 200 km 内边界、4 Rm 外边界和 500 s 时间上限。该例不计算源权重；400 km 源层不会终止轨迹。图只输出 PNG。
+Replace 5000 with 3 for a small run. The original position-only paths do not contain velocity, so this example reintegrates their initial conditions. Boundaries are 200 km and 4 Rm, with a 500 s limit. The 400 km source surface does not terminate these unweighted paths. Only PNG figures are exported.
 
-完整 segments.csv（480389 段）保存在本地运行目录，可由脚本重新生成。每行包含粒子编号、XZ 段端点、实际段时长、三个电场项的平均功率和从探头向过去累计的正时间做功；这些量可重建第二行。[逐粒子做功及终止统计](data/path_power_particles.csv) 与 [绘图检查](data/path_power_qa.json) 随示例保存。
+The original `segments.csv` contains 480,389 display segments and remains local. Records contain particle ID, XZ endpoints, duration, three mean-power terms and cumulative backward-scan work. Particle totals (`path_power_particles.csv`, generated run output) and plot checks (`path_power_qa.json`, generated run output) are generated with the run.
 
-## 验证与限制
+## Recorded checks and interpretation
 
-初始速度与原图逐粒子一致。11 条到达内边界，4989 条到达外边界，没有超时或非有限值。最大整条轨迹能量闭合残差 0.2063 eV；以 max(abs(work),abs(delta K),1 eV) 为分母，99 百分位相对偏差为 0.00170%，最大为 0.1672%。总功率与对流加 Hall 功率的最大差为 2.49e-5 eV/s。210 项测试通过，包括观察回调输出的分段做功之和等于整条轨迹做功、两种 Boris 求解器以及正负功率符号。
+Initial velocities matched the original example. Eleven particles reached the inner boundary and 4989 the outer boundary, without time limits or nonfinite states. The maximum energy-closure residual was 0.2063 eV. Relative to `max(abs(work),abs(delta K),1 eV)`, the 99th percentile and maximum residuals were 0.00170% and 0.1672%. Total power differed from convective plus Hall power by at most 2.49e-5 eV/s. The original 210 tests covered observer segment sums, both Boris solvers and signed power.
 
-这是随机速度轨迹的机制展示，不是经过源项加权的粒子群平均图。0.5 s 的显示平均可能隐藏更短时间的符号变化；能量闭合和原例的轨迹步长检查不能替代所有局部功率结构的显示间隔收敛检查。
-
-第二行累计检查覆盖全部 5000 个粒子，端点累计值与逐粒子总做功的最大差为 3.64e-11 eV。更新前后逐粒子的初始条件、终止状态和整条路径做功保持一致。第二行共享色标范围为 ±100000 eV。
+These paths illustrate mechanisms without source-PSD weighting. The 0.5 s averaging can hide shorter sign changes; energy closure does not establish convergence of local power structure. Cumulative endpoints matched particle totals within 3.64e-11 eV for all 5000 particles. Initial conditions, termination and total work were preserved when the cumulative row was added; its shared range is ±100000 eV.

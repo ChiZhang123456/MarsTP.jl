@@ -1,27 +1,27 @@
-# O₂⁺ probe (0, 0, 2) Rm
+# O₂⁺ detector at (0, 0, 2) Rm
 
 ![Velocity-integrated VDF](probe_psd_projections.png)
 
-探头中心 **(0, 0, 2) Rm**，立方体边长 **0.2 Rm = 678 km**。从同一次 500 km 源面模拟的完整轨迹提取驻留时间，不重新采样或传播粒子。
+The cubic detector is centered at **(0, 0, 2) Rm**, with side length **0.2 Rm=678 km**. Residence times are extracted from saved trajectories of the 500 km source simulation.
 
-先建立各轴 **−500 到 500 km/s、5 km/s 宽度**的三维 PSD，单位 **s³/m⁶**，再将被省略速度轴全部积分：`fxy = sum_z(f3d)*5000 m/s`，`fxz = sum_y(f3d)*5000 m/s`。图中单位为 **s²/m⁵**。坐标显示沿用 ±300 km/s，包含本探头全部速度贡献；turbo、对数色标、无平滑、无零速度切片。
+The three-dimensional PSD uses **5 km/s bins from −500 to 500 km/s** on each axis and has units **s³ m⁻⁶**. Integrating the omitted axis gives `fxy=sum_z(f3d)*5000 m/s` and `fxz=sum_y(f3d)*5000 m/s`, in **s² m⁻⁵**. Plot limits are ±300 km/s, with turbo and logarithmic normalization, without smoothing.
 
-| 量 | 结果 |
+| Quantity | Value |
 | --- | ---: |
-| 密度 (m⁻³) | 1002.16762 |
-| 密度 (cm⁻³) | 0.00100216762 |
-| 独立命中粒子 | 115 |
-| 驻留权重有效样本数 | 9.708 |
-| 驻留段 | 3,328 |
-| 穿面事件 | 230 |
-| 非零三维 bin | 487 |
+| Density (m⁻³) | 1002.16762 |
+| Density (cm⁻³) | 0.00100216762 |
+| Independent particles intersecting the detector | 115 |
+| Residence-weight effective sample size | 9.708 |
+| Residence segments | 3,328 |
+| Face crossings | 230 |
+| Nonzero three-dimensional bins | 487 |
 
-运行生成的本地 `probe_psd_sparse.npz` 保存三维稀疏 PSD、二维投影及完整 200³ 网格的非零值及零基索引，未列出的 bin 是本次抽样的零值。完整统计和速度范围保存在本地 `analysis_summary.json`，这些数据文件不随 GitHub 示例提交。三维积分与两个二维积分都复现同一驻留时间密度。
+Local `probe_psd_sparse.npz` stores nonzero three-dimensional values, zero-based indices and integrated projections for the 200³ grid. Unlisted bins represent zero sample contributions. `analysis_summary.json` stores detailed statistics. These generated files are not included with the GitHub example.
 
-复现步骤见 [上一级 README](../README.md)，当前结果来自与 `forward_psd` 完全共享的 Julia 累积器。计算后，只绘制该探头的库结果：
+See [the main guide](../README.md) for calculation steps. To plot this detector after analysis:
 
 ```powershell
-& $py "$example/plot_library_psd.py" "$reprobe/probe_0_0_2"
+python examples/forward_tracing/monte_carlo_forward_tracing/plot_library_psd.py outputs/my_probes/probe_0_0_2
 ```
 
-本结果采用原生 MHD 笛卡尔轴，最大飞行年龄 500 s，尚未证明稳态收敛。不同探头图的色标独立归一化，跨图比较请读取数值。本探头有效样本数只有约 9.7，5 km/s 分箱中的细结构统计不足，不能据此认定物理细结构。
+Coordinates follow the native MHD Cartesian axes. The maximum flight age is 500 s; steady-state convergence has not been established. Color scales are normalized separately between detectors. Fine velocity structure requires sufficient independent weighted samples.

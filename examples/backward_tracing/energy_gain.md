@@ -60,9 +60,9 @@ The original velocity quadrature is not converged. These energy maps inherit tha
 
 The saved run has 35301 successful trajectories (426 inner, 34875 outer), with no time-limit or nonfinite states. All 138 unit tests pass, including signed uniform-electric-field acceleration/deceleration for both Boris solvers. Independent CSV reduction reproduces every 2D mean, and the PSD agrees with the previous VDF. A shared result variable inside the threaded loop was made local before the verified run; earlier intermediate diagnostics are not distributed.
 
-The 99th percentile relative energy-closure residual is 0.0128%, using max(abs(work),abs(delta K),1 eV) as the denominator. The maximum absolute residual is 1.021 eV. Five points exceed 1% (all have zero PSD), listed in [refine_points.csv](data/refine_points.csv); their original coarse results in energy_3d.csv are not accepted as precise per-particle values. Use the separately retained finer-step results for these points. They contribute nothing to the displayed weighted map. The largest total-minus-convection-minus-Hall difference is 0.000137 eV.
+The 99th percentile relative energy-closure residual is 0.0128%, using max(abs(work),abs(delta K),1 eV) as the denominator. The maximum absolute residual is 1.021 eV. Five points exceed 1% (all have zero PSD), listed in refine_points.csv (`refine_points.csv`, generated run output); their original coarse results in energy_3d.csv are not accepted as precise per-particle values. Use the separately retained finer-step results for these points. They contribute nothing to the displayed weighted map. The largest total-minus-convection-minus-Hall difference is 0.000137 eV.
 
-Files: [2D means](data/energy_xz.csv), [all 3D samples](data/energy_3d.csv), [QA](data/energy_qa.json), [five selected paths at three steps](data/energy_step_check.csv), [flagged-path refinement](data/energy_refinement.csv).
+Files: 2D means (`energy_xz.csv`, generated run output), all 3D samples (`energy_3d.csv`, generated run output), QA (`energy_qa.json`, generated run output), five selected paths at three steps (`energy_step_check.csv`, generated run output), flagged-path refinement (`energy_refinement.csv`, generated run output).
 
 Reproduce flagged-path refinement after the full run with:
 
