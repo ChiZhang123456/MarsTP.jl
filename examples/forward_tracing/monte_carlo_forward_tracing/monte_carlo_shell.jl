@@ -64,30 +64,7 @@ function outward_velocity(rng, U, sigma, er)
 end
 
 # Slab intersection. Face code: -1/+1=x-/x+, -2/+2=y-/y+, -3/+3=z-/z+.
-function cube_segment(a,b,lo,hi)
-    near,far=0.0,1.0
-    enter,leave=0,0
-    d=b-a
-    for k in 1:3
-        if d[k]==0
-            lo[k]<=a[k]<=hi[k] || return nothing
-        else
-            q0,q1=(lo[k]-a[k])/d[k],(hi[k]-a[k])/d[k]
-            f0,f1=-k,k
-            if q0>q1
-                q0,q1=q1,q0;f0,f1=f1,f0
-            end
-            if q0>=near
-                near=q0;enter=f0
-            end
-            if q1<=far
-                far=q1;leave=f1
-            end
-            near<far || return nothing
-        end
-    end
-    return near,far,enter,leave
-end
+cube_segment(a,b,lo,hi)=MarsTP._forward_cube_interval(a,b-a,lo,hi)
 
 function sphere_stop(a,b,inner,outer)
     d=b-a
@@ -150,7 +127,7 @@ function trace_particle(x0,v0,param,c::Config; keep_history=true)
             # Synchronize velocity at clipped detector endpoints; no staggered velocities saved.
             function at(s)
                 xx=x+s*(xn-x);tt=t+s*(tn-t)
-                vv=TP.update_velocity(half,xx,(s*f-0.5)*c.dt,tt,param)
+                vv=v+s*(vn-v) # Same saved-endpoint interpolation as forward_psd
                 return xx,vv,tt
             end
             xa,va,ta=at(s0);xb,vb,tb=at(s1)
@@ -275,7 +252,8 @@ function release_particles(fields,source,c)
     return particles,cells
 end
 
-function main(out,c=Config())
+"""Run the 500 km shell experiment in bounded batches and save synchronized SI states."""
+function run_monte_carlo(out,c=Config())
     c.dt>0 && c.tmax>0 && c.per_cell>0 && c.cell_stride>0 || error("Invalid configuration")
     isapprox(c.tmax/c.dt,round(c.tmax/c.dt);atol=1e-8) || error("tmax must be a multiple of dt")
     ispath(out) && error("Output exists; choose a new run directory: $out")
@@ -313,6 +291,8 @@ function main(out,c=Config())
         "geometry"=>geometry,"created_utc"=>string(now(UTC)),
         "steady_state_note"=>"weights are injection rates; residence gives contribution up to max flight age, no extra division by tmax",
         "trajectory_columns"=>["time_s","x_m","y_m","z_m","vx_ms","vy_ms","vz_ms"])
+    meta["batch_size"]=c.batch_size
+    meta["detector_interpolation"]="piecewise linear saved endpoints, shared with forward_psd"
     meta["compress_trajectories"]=c.compress_trajectories
     meta["n_positive_rate_particles"]=count(p->p.W>0,particles)
     rate_mode=c.flux_model=="reservoir_maxwellian_rate"
@@ -362,18 +342,18 @@ function main(out,c=Config())
                     status="zero_rate",time=0.,x=p.x,v=p.v,work=0.,dK=0.,residual=0.,maxgyro=0.)
             end
             batchid=div(bstart-1,c.batch_size)+1
-            jldopen(joinpath(out,@sprintf("trajectories_%05d.jld2",batchid)),"w";compress=c.compress_trajectories) do file
-                for (q,i) in enumerate(indices)
-                    p=particles[i];r=results[q];counts[r.status]+=1
-                    file["p$(p.id)/state"]=reduce(hcat,r.history)
-                    file["p$(p.id)/$weight_name"]=p.W
-                    file["p$(p.id)/source_density_weight_m3"]=p.density_weight
-                    file["p$(p.id)/cell_id"]=p.cellid
-                    dwell=sum((a[2]-a[1] for a in r.residence);init=0.0)
-                    println(summary,join((p.id,p.cellid,p.W,p.flux,p.area,p.x...,p.v...,r.status,r.time,r.x...,r.v...,r.work,r.dK,r.residual,r.maxgyro,dwell,p.logw,p.density_weight),','))
-                    for a in r.residence;println(resio,join((p.id,p.W,a...),','));end
-                    for a in r.events;println(eventio,join((p.id,p.W,p.W/c.side^2,a...),','));end
-                end
+            trajectories=[(;t=[a[1] for a in r.history],u=[a[2:7] for a in r.history]) for r in results]
+            write_trajectory_batch(joinpath(out,@sprintf("trajectories_%05d.jld2",batchid)),trajectories;
+                particle_ids=[particles[i].id for i in indices],rate_weights_s=[particles[i].W for i in indices],
+                source_density_weights_m3=[particles[i].density_weight for i in indices],
+                cell_ids=[particles[i].cellid for i in indices],termination_codes=[r.status for r in results],
+                species="O2+",coordinate_system=meta["coordinate_system"],compress=c.compress_trajectories)
+            for (q,i) in enumerate(indices)
+                p=particles[i];r=results[q];counts[r.status]+=1
+                dwell=sum((a[2]-a[1] for a in r.residence);init=0.0)
+                println(summary,join((p.id,p.cellid,p.W,p.flux,p.area,p.x...,p.v...,r.status,r.time,r.x...,r.v...,r.work,r.dK,r.residual,r.maxgyro,dwell,p.logw,p.density_weight),','))
+                for a in r.residence;println(resio,join((p.id,p.W,a...),','));end
+                for a in r.events;println(eventio,join((p.id,p.W,p.W/c.side^2,a...),','));end
             end
             flush(summary);flush(resio);flush(eventio)
             println("PROGRESS $(last(indices))/$(length(particles)) elapsed=$(round(time()-start;digits=1)) s $counts")
@@ -386,7 +366,10 @@ function main(out,c=Config())
         TOML.print(io,Dict("complete"=>true,"elapsed_s"=>time()-start,"status_counts"=>counts))
     end
     println("COMPLETE $out")
+    return out
 end
+
+main(out,c=Config())=run_monte_carlo(out,c)
 
 end # module
 

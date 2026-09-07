@@ -10,6 +10,11 @@ See [examples/README.md](examples/README.md) for the 800 km O2+ trajectory panel
 and the dayside/nightside electric-work maps, including Julia/Python source,
 the two PNG figures, prerequisites, run commands, and interpretation notes.
 
+Saved forward trajectories can be analyzed with `forward_psd_saved`, using the
+same accumulator as `forward_psd`. `write_trajectory_batch` provides bounded
+batch output for large ensembles. See the [Monte Carlo API and reproducible
+three-probe example](examples/forward_tracing/monte_carlo_forward_tracing/README.md).
+
 ## Data
 
 Required runtime inputs live in `data/`:

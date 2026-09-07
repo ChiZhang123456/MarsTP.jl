@@ -49,15 +49,93 @@ face_flux_m2_s = Q_i / A_face                             [m^-2 s^-1]
 
 内部位置、速度分别为 m、m/s，速度 bin 体积用 SI 单位；图轴才转为 km/s。驻留时间估计器不再除以总运行时间或粒子数。每步先求轨迹段与立方体交集，再按线性插值速度穿越 bin 的位置切分驻留时间。位置与速度使用同步端点。
 
-注意：本示例 `--dv-kms 5` 表示 bin **宽度**；包内 `forward_psd` 的 `vgrid` 表示每轴 bin **数量**，等效设置为 `vlim=(-500,500), vgrid=200, velocity_unit=:km_s`。
+## 公共计算方法
+
+本目录当前 PNG 和 NPZ 直接来自 [detector_psd_forward.jl](../../../src/tracing/detector_psd_forward.jl) 使用的公共计算核心 [ForwardPSDAccumulator](../../../src/tracing/forward_psd_accumulator.jl)。内存入口 `forward_psd`、磁盘入口 `forward_psd_saved` 和本例的一次扫描三个探头均调用同一个 `accumulate_forward_psd!`，不再独立运行 Python 分箱算法。
+
+每个保存段的位置、速度都做线性插值；立方体采用 `[lower,upper)`，速度网格最后一个上边界包含在内。速度范围外的贡献单独报告，不默默截断或重新归一化。探头边界交点不重新调用 Boris 或读取 MHD 场。
+
+```julia
+using MarsTP
+settings = (; detector_m=[0.,0.,2.] * Rm, side_m=0.2Rm,
+             vlim=(-500.,500.), vgrid=200, velocity_unit=:km_s,
+             species="O2+", coordinate_system="native MHD Cartesian axes")
+
+# 已在内存中的轨迹：solutions 的 t/u 必须为同步的 s、m、m/s。
+r3 = forward_psd(solutions; settings..., rate_weights_s=Q, option="3D")
+# 约 50 GB 的保存目录：逐条读取，不将整个集合装入内存。
+r3 = forward_psd_saved("outputs/my_run"; settings..., option="3D", storage=:sparse)
+# 也可直接取得完整速度积分的二维结果。
+rxy = forward_psd_saved("outputs/my_run"; settings..., option="Vx-Vy")
+```
+
+`vgrid=200` 是每轴 bin 数，范围 ±500 km/s 对应宽度 5 km/s。`storage=:dense` 保留原有数组接口；`:sparse` 返回一基 bin 元组到 PSD 值的 Dict。已发布 NPZ 转为零基 COO 索引。重复调用 `forward_psd_saved` 会重复读取磁盘，因此本例多探头使用下述一次扫描入口。
+
+## 保存约 50 GB 轨迹的函数
+
+[write_trajectory_batch](../../../src/tracing/trajectory_io.jl) 是可复用的库函数。每批只保留当前批次的轨迹，逐批写入后释放内存；总输出可以很大，内存不随全部历史状态线性增长。
+
+```julia
+using MarsTP
+write_trajectory_batch("outputs/my_run/trajectories_00001.jld2", trajectory_batch;
+    particle_ids=ids, rate_weights_s=Q,
+    source_density_weights_m3=density_weights, cell_ids=cell_ids,
+    termination_codes=statuses, species="O2+",
+    coordinate_system="native MHD Cartesian axes", compress=false)
+```
+
+必需参数是 `particle_ids` 和物理粒子率 `rate_weights_s`，其余诊断可省略。函数拒绝覆盖现有路径。文件保存 Float64 的 `p<ID>/state`，Julia 为 7×N，h5py 为 N×7，顺序 t,x,y,z,vx,vy,vz，单位 s、m、m/s。每个粒子同时保存率权重；文件还保存格式版本、单位、种类、坐标说明、终止类型及批次完成标记。`compress=true` 可无损压缩，默认关闭。中途失败的文件不带完成标记，读取器会拒绝使用。
+
+完整的源采样、追踪和保存入口是 [ShellMonteCarlo.run_monte_carlo](monte_carlo_shell.jl)：
+
+```julia
+include("examples/forward_tracing/monte_carlo_forward_tracing/monte_carlo_shell.jl")
+ShellMonteCarlo.run_monte_carlo("outputs/new_rate100_run",
+    ShellMonteCarlo.Config(per_cell=100, dt=0.1, tmax=500., batch_size=1024,
+                          flux_model="reservoir_maxwellian_rate", compress_trajectories=false))
+```
+
+该函数实际调用 `write_trajectory_batch`，不是另一套内嵌写盘实现。原始运行约 48.3 GB 文件继续可用，读取接口兼容原来的 legacy p<ID> 格式，无需重写。旧文件未保存的逐粒子终止码返回 `unavailable`，不伪造成功状态；原 `particles.csv` 仍保留实际终止原因。
 
 ## 文件与复现
 
-在仓库根目录运行，Julia 使用本仓库 Project.toml / Manifest.toml。原运行使用 Julia 1.12.6、MarsTP 提交 `58e078fa4d853a0307df0e9c87b9b44528835dc7`。Python 需 NumPy、Matplotlib、h5py；轨迹背景还需要用户本地 `py_space_zc`。Windows 已验证环境为 `C:\Users\Win\.conda\envs\mars\python.exe`。
+在仓库根目录运行，使用本仓库 Project.toml / Manifest.toml。Python 仅用于 PNG 和可移植 NPZ 输出，需要 NumPy、Matplotlib、h5py。轨迹示意图另用 `py_space_zc`。
 
-输入：`data/mars_fields_spherical_from_dat.vts`，SHA256 为 `fa92bd82fe16975ad0d50f4e40ace344e9d41389d6024976d423e6126bc7a5c8`。输入需自行提供，脚本核对文件实际径向网格，不用存在约 353 m 偏差的旧解析径向轴代替它。
+首次模拟需要 `data/mars_fields_spherical_from_dat.vts`，SHA256 为 `fa92bd82fe16975ad0d50f4e40ace344e9d41389d6024976d423e6126bc7a5c8`。对已保存轨迹计算 PSD 不需要重新读取 MHD。原始模拟为 Julia 1.12.6、MarsTP 提交 `58e078fa4d853a0307df0e9c87b9b44528835dc7`。
 
-新探头提取脚本另需已安装的 Numba。三维稀疏存储并不改变 bin 定义或归一化，例如直接读取发布的 NPZ 重建 XY 投影：
+```powershell
+$example = 'examples/forward_tracing/monte_carlo_forward_tracing'
+$run = 'outputs/mc500_rate100_full_20260906a'
+$reprobe = 'outputs/new_library_psd'
+$py = 'C:\Users\Win\.conda\envs\mars\python.exe'
+# 一次读取全部批次，并计算三个探头。输出目录必须不存在。
+julia --startup-file=no --compiled-modules=existing --project=. "$example/analyze_saved_probes.jl" $run $reprobe
+# 只画库函数已经计算好的 PSD，不再在 Python 中分箱。
+& $py "$example/plot_library_psd.py" $reprobe
+```
+
+需要从头重新模拟时，先设置新的 `$run`，再执行：
+
+```powershell
+$env:MC_GIT_COMMIT = git rev-parse HEAD
+$env:MC_GIT_STATUS = (git status --short) -join "`n"
+julia --startup-file=no --compiled-modules=existing --threads=12 --project=. "$example/monte_carlo_shell.jl" $run 1 500 0.1 100 reservoir_maxwellian_rate false
+```
+
+不要为重新分 bin 或增加探头而重跑原始积分。可先用 cell stride=36、tmax=0.2、dt=0.1、per_cell=2 做小样本写盘检查。
+
+| 文件 | 用途 |
+| --- | --- |
+| [analyze_saved_probes.jl](analyze_saved_probes.jl) | 一次读取全部轨迹，三个公共累积器计算 PSD 和探头记录 |
+| [plot_library_psd.py](plot_library_psd.py) | 读取库计算的 JLD2，核验积分、输出 PNG/NPZ/JSON |
+| [monte_carlo_shell.jl](monte_carlo_shell.jl) | 源采样、Boris、公共分批保存函数 |
+| [plot_trajectories.py](plot_trajectories.py) | 5000 条轨迹示意图 |
+| [test_monte_carlo.jl](test_monte_carlo.jl) | 源模型、几何与积分测试 |
+| [trajectory_io.jl](../../../test/trajectory_io.jl) | 磁盘与内存结果一致、压缩、legacy、异常输入测试 |
+
+`reprobe_saved.py` 兼容入口转发到 Julia；`analyze_monte_carlo.py`、`analyze_probe.py` 的命令行转发到库结果绘图。其中旧 Python 分箱函数只保留为独立回归参考，不用于当前发布结果。`synchronize_reprobe.jl` 已停用，会明确提示使用新的公共入口，防止误用旧 Boris 交点处理。
+
+每个探头输出 `library_psd.jld2`、`library_summary.toml`、`probe_residence.csv`，绘图步骤另存 PNG、`probe_psd_sparse.npz`、`analysis_summary.json`、逐粒子权重/驻留时间 CSV、穿面通量/速度 CSV。完整扫描成功后才写入 `analysis_complete.toml`。已发布的小型 NPZ 包含三维非零值、零基索引、完整边界和二维投影：
 
 ```python
 import numpy as np
@@ -68,69 +146,7 @@ with np.load('probe_psd_sparse.npz') as a:
     np.testing.assert_allclose(fxy, a['fxy_s2_m5'])
 ```
 
-```powershell
-$example = 'examples/forward_tracing/monte_carlo_forward_tracing'
-$run = 'outputs/new_rate100_run'
-$py = 'C:\Users\Win\.conda\envs\mars\python.exe'
-$env:MC_GIT_COMMIT = git rev-parse HEAD
-$env:MC_GIT_STATUS = (git status --short) -join "`n"
-julia --startup-file=no --compiled-modules=existing --threads=12 --project=. "$example/monte_carlo_shell.jl" $run 1 500 0.1 100 reservoir_maxwellian_rate false
-& $py "$example/analyze_monte_carlo.py" $run --dv-kms 5 --vmax-kms 500 --plot-limit-kms 300 --output-dir "$run/analysis_5kms"
-& $py "$example/plot_trajectories.py" $run --output "$run/trajectories_5000.png" --count 5000 --seed 20260906
-```
-
-模拟输出目录必须不存在。模拟位置参数依次是输出目录、cell stride、最大飞行年龄、dt、每格抽样数、源模型、JLD2 压缩开关。先用较大 stride、较短时间进行小样本试运行。若 SpacePy 默认配置目录不可写，可将进程环境变量 `SPACEPY` 指向可写目录，它会在该目录下创建 `.spacepy`。若 `py_space_zc` 导入时停在 Numba 缓存初始化，将 `NUMBA_CACHE_DIR` 指向可写缓存目录即可；无需修改已安装的库。
-
-| 文件 | 内容 |
-| --- | --- |
-| [monte_carlo_shell.jl](monte_carlo_shell.jl) | 源采样、Boris 传播、边界、探头相交与流式保存 |
-| [analyze_monte_carlo.py](analyze_monte_carlo.py) | 绘图助手及稠密测试参考，主入口转入稀疏分析 |
-| [analyze_probe.py](analyze_probe.py) | 完整三维稀疏 PSD、全速度积分投影、密度一致性验证 |
-| [reprobe_saved.py](reprobe_saved.py) | 扫描全部轨迹，一次提取三个探头的驻留段 |
-| [synchronize_reprobe.jl](synchronize_reprobe.jl) | 根据原 Boris drift 速度同步探头交点速度 |
-| [plot_trajectories.py](plot_trajectories.py) | 固定种子 5000 条轨迹三平面 PNG |
-| [qa_monte_carlo.py](qa_monte_carlo.py) | 批次轨迹、初末状态、粒子组计数检查 |
-| [refine_monte_carlo.jl](refine_monte_carlo.jl) | 选定子集以 0.1、0.05、0.025 s 重算 |
-| [test_monte_carlo.jl](test_monte_carlo.jl) | 几何、采样归一化、解析传播测试 |
-| [test_monte_carlo_analysis.py](test_monte_carlo_analysis.py) | 速度 bin 穿越、密度单位及相关样本检查 |
-
-原始输出包含 `particles.csv`、`source_cells.csv`、`probe_residence.csv`、`probe_crossings.csv`、`metadata.toml`、`completion.toml` 和 `trajectories_*.jld2`。JLD2 各 `p<ID>/state` 在 Julia 中为 7×N，h5py 中为 N×7，列为 t,x,y,z,vx,vy,vz，单位 s、m、m/s。权重也保存在各组中。分析另存 `probe_psd_sparse.npz`、`analysis_summary.json` 和粒子贡献 CSV；稀疏文件保存零基 `indices_xyz`、对应 `f3d_s3_m6`、完整速度边界、200³ 形状及两张二维投影。无需构造稠密 200³ 数组。目录内的小型 NPZ 可用于读取已发布的 PSD，原始大型轨迹不上传。
-
-```powershell
-julia --startup-file=no --compiled-modules=existing --project=. "$example/test_monte_carlo.jl"
-& $py "$example/test_monte_carlo_analysis.py"
-& $py "$example/test_reprobe.py"
-# 可选：对已有完整运行进行子集时间步细化，再核验轨迹文件。
-julia --startup-file=no --compiled-modules=existing --project=. "$example/refine_monte_carlo.jl" $run
-& $py "$example/qa_monte_carlo.py" $run
-```
-
-## 本次结果与验证范围
-
-图来自 `mc500_rate100_full_20260906a`，未为本次改图重新积分。正率粒子 506,259 个，零率 509,041 个；正率终止类型为 inner 315,992、outer 108,153、time_limit 82,114，无数值失败。12 线程积分及写盘用时 589.5 s，原始轨迹约 48.3 GB。
-
-探头有 416 个独立粒子、834 次穿面事件、11,151 段驻留记录，驻留权重有效样本数 119.29。三维 PSD 积分密度 **30,966.9 m⁻³ = 0.0309669 cm⁻³**。三维网格 ±500 km/s，图示 ±300 km/s 包含本次全部探头速度贡献。源率 2.23077×10²⁴ s⁻¹，与解析局部 Maxwellian 全表面积分相差 −1.32 个 Monte Carlo 标准误差。
-
-整理后通过 226 项 Julia 测试、4 项 Python 测试，以及完整源率逐粒子重建、每格密度权重和 PSD 积分密度检查。此前抽查 992 个批次首尾共 1984 条完整轨迹，并核验全部粒子组数。231 条子集的相邻时间步细化使探头密度改变约 −0.00107%、−0.00218%，终止类型不变。
-
-这是有限样本、有限探头体积、最大飞行年龄 500 s 的结果，尚未证明稳态或完整 PSD 收敛。达到时限的源率占 18.13%。整体最大做功闭合残差 0.173 eV，320 条轨迹相对残差超过 1%（分母以 1 eV 为下限）；探头贡献粒子的最大相对残差为 2.46×10⁻⁷。原始结果均保留。
-
 ## 已保存轨迹上的三个探头
-
-以下命令只读取原始运行输出及同一 MHD 场，不重新传播粒子。输出目录必须不存在：
-
-```powershell
-$reprobe = 'outputs/new_three_probes'
-& $py "$example/reprobe_saved.py" $run $reprobe
-julia --startup-file=no --compiled-modules=existing --project=. "$example/synchronize_reprobe.jl" $reprobe
-foreach ($probeName in @('probe_1_0_2','probe_0_0_2','probe_m1p5_0_1')) {
-    & $py "$example/analyze_probe.py" "$reprobe/$probeName" --output-dir "$reprobe/$probeName/analysis"
-}
-```
-
-提取器检查全部 1,015,300 个粒子组。交点的位置、时间由保存的逐步轨迹精确裁剪得到；drift 速度由该步位移除以实际步时长重建，再调用与原追踪相同的 `TP.update_velocity` 计算交点同步速度，并验证 MHD 输入 SHA256。
-
-原探头回放的 11,151 段驻留记录与原记录相比：时间、位置、权重相同，密度相对差为 0，最大速度差 2.45×10⁻⁸ m/s。新增 4 项检查覆盖立方体交会、平行漏过、稀疏与稠密 PSD 等价及速度越界拒绝。
 
 | 探头位置 (Rm) | 密度 (cm⁻³) | 独立命中粒子 | 驻留权重有效样本数 | 驻留段 |
 | --- | ---: | ---: | ---: | ---: |
@@ -138,4 +154,21 @@ foreach ($probeName in @('probe_1_0_2','probe_0_0_2','probe_m1p5_0_1')) {
 | (0,0,2) | 0.001002168 | 115 | 9.71 | 3,328 |
 | (−1.5,0,1) | 0.1177217 | 2,011 | 353.71 | 124,374 |
 
-三个探头均验证 `sum(f3d)*dv³ = sum(fxy)*dv² = sum(fxz)*dv² = sum(Q*tau)/V`，所有速度积分覆盖完整 ±500 km/s。不同图采用各自的对数色标，颜色不能直接跨图比较。特别是 (0,0,2) 的有效样本数较低，5 km/s 图上的细结构仍受 Monte Carlo 噪声影响。
+当前图来自 `mc500_library_psd_20260906`，公共接口完整读取原运行的 992 个批次和 1,015,300 个粒子组。三个探头均满足 `sum(f3d)*dv³ = sum(fxy)*dv² = sum(fxz)*dv² = sum(Q*tau)/V`，速度范围外密度为零。色标独立归一化，不宜只凭颜色跨图比较。特别是 (0,0,2) 的有效样本数约 9.7，5 km/s 细结构仍受抽样噪声影响。
+
+相较以前的 Boris 交点重算版本，密度与命中数不变，六个二维投影的相对 L1 差异最大 2.48×10⁻⁶，约 0.00025%。详见 [method_comparison.json](method_comparison.json)。旧 `original_probe_validation.json` 是旧交点方法的历史校验，不代表当前方法。
+
+## 验证与限制
+
+- 包内全部 312 项测试通过，其中 25 项覆盖分批读写及内存/磁盘 PSD 等价；示例 226 项测试通过。
+- 使用新 `run_monte_carlo` 和 `write_trajectory_batch` 完成 566 个样本、0.2 s 的实际 MHD 小规模写盘运行；未重写原始 48.3 GB。
+- 原运行正率 506,259 个、零率 509,041 个；inner 315,992、outer 108,153、time_limit 82,114，无数值失败。12 线程积分写盘约 589.5 s。
+- 最大飞行年龄 500 s，达到时限的源率占 18.13%，未证明稳态或完整 PSD 收敛。以前 231 条子集时间步细化改变探头密度约 −0.00107%、−0.00218%，不代表完整集合收敛。
+- 原轨迹整体最大做功闭合残差约 0.173 eV；320 条相对残差超过 1%（分母以 1 eV 为下限）。原始轨迹均保留。
+
+```powershell
+julia --startup-file=no --compiled-modules=existing --project=. test/runtests.jl
+julia --startup-file=no --compiled-modules=existing --project=. "$example/test_monte_carlo.jl"
+```
+
+环境记录：仅将 Manifest 中已有的标准库 TOML 声明为直接依赖，保留所有锁定版本。现有本地 Registry 缺少锁定的 UnsafeAtomics 0.3.2，`Pkg.resolve()` 未完成；未因此升级包。已安装环境可完成上述测试和运行。

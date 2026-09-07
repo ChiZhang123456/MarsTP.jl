@@ -18,10 +18,10 @@
 
 [三维稀疏 PSD 和二维投影](probe_psd_sparse.npz) 保存完整 200³ 网格的非零值及零基索引，未列出的 bin 是本次抽样的零值。另见 [完整统计和速度范围](analysis_summary.json)。三维积分与两个二维积分都复现同一驻留时间密度。
 
-复现步骤见 [上一级 README](../README.md#已保存轨迹上的三个探头)，分析单个提取结果的命令为：
+复现步骤见 [上一级 README](../README.md#已保存轨迹上的三个探头)，当前结果来自与 `forward_psd` 完全共享的 Julia 累积器。计算后，只绘制该探头的库结果：
 
 ```powershell
-& $py "$example/analyze_probe.py" "$reprobe/probe_0_0_2" --output-dir "$reprobe/probe_0_0_2/analysis"
+& $py "$example/plot_library_psd.py" "$reprobe/probe_0_0_2"
 ```
 
 本结果采用原生 MHD 笛卡尔轴，最大飞行年龄 500 s，尚未证明稳态收敛。不同探头图的色标独立归一化，跨图比较请读取数值。本探头有效样本数只有约 9.7，5 km/s 分箱中的细结构统计不足，不能据此认定物理细结构。

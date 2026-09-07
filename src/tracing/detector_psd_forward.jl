@@ -1,7 +1,7 @@
 """
     forward_psd(solutions; detector_m, side_m, vlim, vgrid, species="O2+",
                 rate_weights_s, option="3D", velocity_unit=:m_s,
-                coordinate_system="unspecified")
+                coordinate_system="unspecified", storage=:dense)
 
 Steady-source, finite-volume velocity PSD from saved forward trajectories.
 `solutions` accepts `trace_forward` output, a TestParticle ensemble, a vector of
@@ -34,115 +34,23 @@ saved samples cannot be recovered: check timestep/save-cadence convergence.
 Only saved time intervals contribute; no extrapolation or extra time/sample
 normalization is performed. Failed solver return codes and invalid data error.
 No tracing, field loading, plotting, or file writing is performed.
+`storage=:sparse` optionally returns a Dict with one-based bin tuple keys.
+This function and `forward_psd_saved` share `ForwardPSDAccumulator`.
 """
 function forward_psd(solutions; detector_m, side_m, vlim, vgrid,
         species="O2+", rate_weights_s, option="3D", velocity_unit=:m_s,
-        coordinate_system="unspecified")
-    haskey(TP.SpeciesDict, species) || throw(ArgumentError("Unknown species: $species"))
-    sp = TP.SpeciesDict[species]
-    length(detector_m) == 3 && all(isfinite, detector_m) ||
-        throw(ArgumentError("detector_m must contain three finite coordinates"))
-    isfinite(side_m) && side_m > 0 || throw(ArgumentError("side_m must be positive"))
-    center = SVector{3,Float64}(detector_m)
-    side = Float64(side_m)
-    lower, upper = center .- side/2, center .+ side/2
-    all(isfinite, lower) && all(isfinite, upper) && all(upper .> lower) &&
-        isfinite(side^3) && side^3 > 0 || throw(ArgumentError("Unrepresentable cube"))
-    edges = _psd_edges(vlim, vgrid, velocity_unit)
-    widths = diff.(edges)
-    dims = length.(widths)
-    key = lowercase(replace(string(option), "v"=>"", "V"=>"", "-"=>""))
-    kept = key in ("3d", "xyz") ? (1,2,3) : key == "xy" ? (1,2) :
-        key == "yz" ? (2,3) : key == "xz" ? (1,3) :
-        throw(ArgumentError("option must be 3D, Vx-Vy, Vy-Vz, or Vx-Vz"))
-    trajectories = hasproperty(solutions, :t) ? (solutions,) :
+        coordinate_system="unspecified", storage=:dense)
+    acc=ForwardPSDAccumulator(;detector_m,side_m,vlim,vgrid,species,velocity_unit,coordinate_system)
+    trajectories=hasproperty(solutions,:t) ? (solutions,) :
         solutions isa AbstractVector ? solutions : solutions.u
     rate_weights_s isa AbstractVector || rate_weights_s isa Tuple ||
         throw(ArgumentError("rate_weights_s must contain one rate per trajectory"))
-    length(trajectories) == length(rate_weights_s) ||
+    length(trajectories)==length(rate_weights_s) ||
         throw(ArgumentError("One rate_weights_s entry is required per trajectory"))
-    rates = Float64[q for q in rate_weights_s]
-    all(q -> isfinite(q) && q >= 0, rates) || throw(ArgumentError("Invalid particle rates"))
-    occupancy = zeros(ntuple(j -> dims[kept[j]], length(kept)))
-    residence = zeros(length(trajectories))
-    outside = zeros(length(trajectories))
-    retcodes = String[]
-    cuts = Float64[]
-    for (i, wrapped) in enumerate(trajectories)
-        traj = _psd_trajectory(wrapped, sp)
-        push!(retcodes, hasproperty(traj, :retcode) ? string(traj.retcode) : "unavailable")
-        for j in 1:(length(traj.t)-1)
-            a, b = traj.u[j], traj.u[j+1]
-            dt = Float64(traj.t[j+1]) - Float64(traj.t[j])
-            isfinite(dt) && dt > 0 || throw(ArgumentError("Forward times must strictly increase"))
-            x = SVector{3,Float64}(a[1],a[2],a[3])
-            dx = SVector{3,Float64}(b[1],b[2],b[3]) - x
-            v = SVector{3,Float64}(a[4],a[5],a[6])
-            dv = SVector{3,Float64}(b[4],b[5],b[6]) - v
-            all(isfinite, dx) && all(isfinite, dv) || throw(ArgumentError("Segment overflow"))
-            lo, hi = 0.0, 1.0
-            for k in 1:3
-                if dx[k] == 0
-                    if !(lower[k] <= x[k] < upper[k])
-                        hi = lo
-                        break
-                    end
-                else
-                    p, q = (lower[k]-x[k])/dx[k], (upper[k]-x[k])/dx[k]
-                    lo, hi = max(lo, min(p,q)), min(hi, max(p,q))
-                end
-            end
-            hi > lo || continue
-            residence[i] += dt*(hi-lo)
-            empty!(cuts)
-            push!(cuts, lo, hi)
-            for k in 1:3
-                dv[k] == 0 && continue
-                v0, v1 = v[k]+lo*dv[k], v[k]+hi*dv[k]
-                firstedge = searchsortedfirst(edges[k], min(v0,v1))
-                lastedge = searchsortedlast(edges[k], max(v0,v1))
-                for n in firstedge:lastedge
-                    alpha = (edges[k][n]-v[k])/dv[k]
-                    lo < alpha < hi && push!(cuts, alpha)
-                end
-            end
-            sort!(cuts)
-            for n in 1:(length(cuts)-1)
-                duration = dt*(cuts[n+1]-cuts[n])
-                duration > 0 || continue
-                vm = v + ((cuts[n]+cuts[n+1])/2)*dv
-                bins = ntuple(3) do k
-                    value = vm[k]
-                    value < first(edges[k]) || value > last(edges[k]) ? 0 :
-                        min(searchsortedlast(edges[k], value), dims[k])
-                end
-                if any(==(0), bins)
-                    outside[i] += duration
-                else
-                    index = ntuple(j -> bins[kept[j]], length(kept))
-                    occupancy[index...] += rates[i]*duration
-                end
-            end
-        end
+    for (i,traj) in enumerate(trajectories)
+        accumulate_forward_psd!(acc,traj;rate_weight_s=rate_weights_s[i],particle_id=i)
     end
-    total_density = sum(rates .* residence) / side^3
-    outside_density = sum(rates .* outside) / side^3
-    density_in_range = sum(occupancy) / side^3
-    for index in CartesianIndices(occupancy)
-        volume = side^3 * prod(widths[kept[j]][index[j]] for j in eachindex(kept))
-        isfinite(volume) && volume > 0 || throw(ArgumentError("Unrepresentable phase-space volume"))
-        occupancy[index] /= volume
-    end
-    all(isfinite, occupancy) && isfinite(total_density) && isfinite(outside_density) ||
-        throw(ArgumentError("PSD accumulation overflow"))
-    return (; psd=occupancy, axes=map(k -> (:vx,:vy,:vz)[k], kept),
-        velocity_centers_m_s=map(k -> (edges[k][1:end-1]+edges[k][2:end])/2, kept),
-        velocity_edges_m_s=map(k -> edges[k], kept), all_velocity_edges_m_s=edges,
-        units=length(kept)==3 ? "s^3 m^-6" : "s^2 m^-5",
-        density_in_range_m3=density_in_range, density_outside_vlim_m3=outside_density,
-        density_total_m3=total_density, residence_s=residence, outside_vlim_residence_s=outside,
-        retcodes, species, detector_m=center, side_m=side, coordinate_system,
-        interpolation=:piecewise_linear)
+    return finish_forward_psd(acc;option,storage)
 end
 
 function _psd_edges(vlim, vgrid, velocity_unit)

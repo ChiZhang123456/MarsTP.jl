@@ -5,11 +5,11 @@
     1.0
   ],
   "cube_side_Rm": 0.2,
-  "source_run_directory": "D:\\Work_Work\\Mars\\MAVEN\\MarsTP\\MarsTP.jl\\outputs\\mc500_rate100_full_20260906a",
   "coordinate_system": "native MHD Cartesian axes; MSO/MSE provenance not established",
   "source_sha256": "fa92bd82fe16975ad0d50f4e40ace344e9d41389d6024976d423e6126bc7a5c8",
-  "number_density_m3": 117721.66528407467,
-  "number_density_cm3": 0.11772166528407467,
+  "source_run_directory": "D:\\Work_Work\\Mars\\MAVEN\\MarsTP\\MarsTP.jl\\outputs\\mc500_rate100_full_20260906a",
+  "number_density_m3": 117721.66528407468,
+  "number_density_cm3": 0.11772166528407468,
   "unique_probe_particles": 2011,
   "probe_effective_particles": 353.70599615077236,
   "residence_segments": 124374,
@@ -18,38 +18,41 @@
     -500.0,
     500.0
   ],
+  "nonzero_3d_bins": 3285,
   "grid_shape": [
     200,
     200,
     200
   ],
-  "nonzero_3d_bins": 3285,
   "plot_limit_kms": 300.0,
+  "volume_averaged_number_flux_vector_m2_s": [
+    -10575032079.71071,
+    7963479.817747472,
+    -130921371.18025947
+  ],
+  "density_outside_vlim_m3": 0.0,
+  "estimator": "MarsTP.ForwardPSDAccumulator, shared by forward_psd and forward_psd_saved",
+  "interpolation": "piecewise_linear_saved_endpoints",
   "velocity_range_kms": {
     "x": [
-      -185.1092899942511,
-      -5.884101691564924
+      -185.10922976623772,
+      -5.884501165125058
     ],
     "y": [
-      -96.47381445340886,
-      96.613598161928
+      -96.47235069987615,
+      96.61291742520605
     ],
     "z": [
-      -63.226158947919174,
-      76.52727146264164
+      -63.2261571860096,
+      76.52735871580683
     ]
   },
-  "volume_averaged_number_flux_vector_m2_s": [
-    -10575032207.563427,
-    7963479.134587184,
-    -130921396.68347324
-  ],
+  "maximum_flight_age_s": 500.0,
   "psd_definition": "f3d=sum Q_i*tau_ib/(V*dv^3), units s^3/m^6",
   "projection_definition": "fxy=sum_z f3d*dv; fxz=sum_y f3d*dv, units s^2/m^5",
-  "storage": "COO indices_xyz are zero-based; omitted bins are exactly zero in this Monte Carlo estimator",
-  "maximum_flight_age_s": 500.0,
+  "storage": "COO indices_xyz are zero-based; omitted bins have zero sampled occupancy",
   "limitations": "Finite Monte Carlo sample and 500 s flight-age window; no steady-state convergence claim.",
-  "displayed_density_fraction_xy": 1.0,
-  "displayed_density_fraction_xz": 1.0,
+  "displayed_density_fraction_xy": 0.9999999999999999,
+  "displayed_density_fraction_xz": 1.0000000000000002,
   "crossing_events": 4042
 }
