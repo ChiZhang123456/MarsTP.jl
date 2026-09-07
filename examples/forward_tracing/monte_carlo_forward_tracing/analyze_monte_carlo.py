@@ -1,8 +1,8 @@
 """Re-bin finite-volume O2+ Monte Carlo residence records in SI units.
 
-Usage: python analyze_monte_carlo.py RUN_DIR [--dv-kms 5] [--vmax-kms 300]
-The two primary panels integrate over the omitted velocity. A separate figure
-shows central-bin slab averages, which retain the 3D PSD units.
+Usage: python analyze_monte_carlo.py RUN_DIR --output-dir NEW_DIR
+Defaults: 1 km/s bins on each axis from -500 to 500 km/s.
+The panels integrate over the entire omitted velocity axis; no slices.
 """
 from pathlib import Path
 import argparse
@@ -124,132 +124,11 @@ def draw_panels(path, edges, a, b, label, subtitle, hits, neff, meta, zoom=False
 
 
 def main():
-    parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("run",type=Path)
-    parser.add_argument("--dv-kms",type=float,default=5.)
-    parser.add_argument("--vmax-kms",type=float,default=300.)
-    parser.add_argument("--plot-limit-kms",type=float,default=300.,help="Axis display only; retain all velocity bins in saved PSD")
-    parser.add_argument("--output-dir",type=Path,help="New directory for derived outputs; read original run without overwriting its analysis")
-    args=parser.parse_args()
-    if args.dv_kms <= 0:
-        raise ValueError("dv must be positive")
-    out=args.run
-    meta=tomllib.loads((out/"metadata.toml").read_text())
-    meta["plot_limit_kms"]=args.plot_limit_kms
-    complete=tomllib.loads((out/"completion.toml").read_text())
-    assert complete["complete"]
-    particles=load_csv(out/"particles.csv")
-    cells=load_csv(out/"source_cells.csv")
-    records=load_csv(out/"probe_residence.csv")
-    events=load_csv(out/"probe_crossings.csv")
-    if args.output_dir is not None:
-        out=args.output_dir
-        out.mkdir(parents=True,exist_ok=False)
-    assert len(particles)==meta["n_particles"]
-    starts=np.searchsorted(particles["cell_id"],cells["cell_id"],side="left")
-    ends=np.searchsorted(particles["cell_id"],cells["cell_id"],side="right")
-    analytic_rate=0.;rate_variance=0.
-    for r,start,end in zip(cells,starts,ends):
-        p=particles[start:end]
-        w=p["weight_s1"]
-        assert len(w)==meta["per_cell"]
-        if meta["flux_model"]=="reservoir_maxwellian_rate":
-            x=np.column_stack([p[f"{k}0_m"] for k in "xyz"])
-            v=np.column_stack([p[f"v{k}0_ms"] for k in "xyz"])
-            vr=np.sum(v*x,axis=1)/np.linalg.norm(x,axis=1)
-            expected=r["n_m3"]*r["area_m2"]*np.maximum(vr,0)*np.exp(p["log_importance"])/meta["per_cell"]
-            # Near-tangent v dot er suffers cancellation. Bound the difference
-            # from recomputing the normalized direction after CSV roundtrip.
-            rounding=64*np.finfo(float).eps*r["n_m3"]*r["area_m2"]*np.exp(p["log_importance"])/meta["per_cell"]*np.linalg.norm(v,axis=1)
-            assert np.all(abs(w-expected)<=1e-12*abs(expected)+rounding)
-            assert np.isclose(p["source_density_weight_m3"].sum(),r["n_m3"],rtol=1e-12)
-            normal=x[0]/np.linalg.norm(x[0])
-            ur=np.dot(normal,[r["ux_ms"],r["uy_ms"],r["uz_ms"]])
-            sigma=math.sqrt(1.380649e-23*r["Ti_K"]/meta["particle_mass_kg"])
-            a=ur/sigma
-            analytic_rate+=r["n_m3"]*r["area_m2"]*(sigma*math.exp(-a*a/2)/math.sqrt(2*math.pi)+ur*.5*math.erfc(-a/math.sqrt(2)))
-            N=meta["per_cell"]
-            if N>1:
-                rate_variance+=N/(N-1)*np.sum((w-w.mean())**2)
-        else:
-            assert np.isclose(w.sum(),r["flux_m2_s"]*r["area_m2"],rtol=1e-12,atol=1e-100)
-    vmax=100e3
-    if len(records):
-        vmax=max(vmax,max(float(np.max(abs(records[f"v{k}{i}_ms"]))) for k in "xyz" for i in (0,1)))
-    dv=args.dv_kms*1e3
-    extent=(np.ceil(vmax/dv)+.5)*dv if args.vmax_kms is None else args.vmax_kms*1e3
-    if extent <= 0:
-        raise ValueError("vmax must be positive")
-    if not np.isclose(2*extent/dv,round(2*extent/dv)):
-        raise ValueError("The full velocity span 2*vmax must be an integer multiple of dv")
-    # Centers at zero for central-slab views; custom extent must align to dv.
-    edge=np.arange(-extent,extent+dv*.1,dv)
-    edges=(edge,edge.copy(),edge.copy())
-    f3d,number,unique,neff,current=bin_residence(records,edges,meta["cube_volume_m3"])
-    fxy=np.sum(f3d*np.diff(edge)[None,None,:],axis=2)
-    fxz=np.sum(f3d*np.diff(edge)[None,:,None],axis=1)
-    center=int(np.searchsorted(edge,0,side="right")-1)
-    slice_xy=f3d[:,:,center];slice_xz=f3d[:,center,:]
-    density=number.sum()/meta["cube_volume_m3"]
-    dwell_number=particles["weight_s1"]*particles["probe_residence_s"]
-    assert np.isclose(density,dwell_number.sum()/meta["cube_volume_m3"],rtol=1e-10,atol=1e-100)
-    hit_ids=particles["particle_id"][particles["probe_residence_s"]>0]
-    effective=dwell_number.sum()**2/np.sum(dwell_number**2) if np.any(dwell_number) else 0.
-    cell_neff=[]
-    for start,end in zip(starts,ends):
-        w=particles["weight_s1"][start:end]
-        if np.any(w):cell_neff.append(w.sum()**2/np.sum(w*w))
-    faces={}
-    for face in (-1,1,-2,2,-3,3):
-        e=events[events["face"]==face]
-        faces[str(face)]={"incoming_m2_s":float(e["face_flux_m2_s"][e["direction"]==1].sum()),
-            "outgoing_m2_s":float(e["face_flux_m2_s"][e["direction"]==-1].sum())}
-    residual=abs(particles["residual_eV"])
-    closure_scale=np.maximum.reduce([abs(particles["deltaK_eV"]),abs(particles["work_eV"]),np.ones(len(particles))])
-    summary={"number_density_m3":float(density),"number_density_cm3":float(density/1e6),
-        "unique_probe_particles":len(hit_ids),"probe_effective_particles":float(effective),
-        "residence_segments":len(records),"crossing_events":len(events),
-        "volume_averaged_number_flux_vector_m2_s":current.tolist(),"face_fluxes":faces,
-        "source_total_rate_s1":float(particles["weight_s1"].sum()),
-        "source_cell_neff_min_median_max":np.quantile(cell_neff,[0,.5,1]).tolist(),
-        "velocity_bin_width_kms":args.dv_kms,"velocity_edges_kms":[float(edge[0]/1e3),float(edge[-1]/1e3)],
-        "central_slab_bounds_kms":[float(edge[center]/1e3),float(edge[center+1]/1e3)],
-        "max_energy_closure_error_eV":float(residual.max()),
-        "energy_closure_relative_p50_p95_max":np.quantile(residual/closure_scale,[.5,.95,1]).tolist(),
-        "max_gyro_angle_rad":float(particles["max_gyro_angle_rad"].max()),
-        "time_limit_particles":int(np.sum(particles["status"]=="time_limit")),
-        "time_limit_weight_fraction":float(particles["weight_s1"][particles["status"]=="time_limit"].sum()/particles["weight_s1"].sum()),
-        "status_counts":complete["status_counts"],
-        "psd_definition":"sum W_i * dwell_time_i_in_bin / (cube_volume * dvx*dvy*dvz)",
-        "projection_definition":"fxy = integral f3d dvz; fxz = integral f3d dvy",
-        "flux_model":meta["flux_model"],"proposal_draws_per_cell":meta["per_cell"],
-        "positive_rate_particles":int(np.sum(particles["weight_s1"]>0)),
-        "plot_limit_kms":args.plot_limit_kms,
-        "source_run_directory":str(args.run.resolve()),
-        "limitations":"Finite source samples, finite flight-age window, finite cube average. Sampling zeros are not physical zeros. No steady-state or MC convergence claim."}
-    if meta["flux_model"]=="reservoir_maxwellian_rate":
-        summary["analytic_source_outward_rate_s1"]=float(analytic_rate)
-        summary["source_rate_mc_standard_error_s1"]=float(math.sqrt(rate_variance))
-        summary["source_rate_mc_minus_analytic_sigma"]=float((particles["weight_s1"].sum()-analytic_rate)/math.sqrt(rate_variance)) if rate_variance>0 else None
-    if args.plot_limit_kms is not None:
-        lim=args.plot_limit_kms*1e3
-        overlap=np.maximum(0,np.minimum(edge[1:],lim)-np.maximum(edge[:-1],-lim))
-        summary["displayed_density_fraction_xy"]=float(np.sum(fxy*overlap[:,None]*overlap[None,:])/density) if density>0 else 0.
-        summary["displayed_density_fraction_xz"]=float(np.sum(fxz*overlap[:,None]*overlap[None,:])/density) if density>0 else 0.
-    np.savez_compressed(out/"probe_psd.npz",vx_edges_ms=edge,vy_edges_ms=edge,vz_edges_ms=edge,
-        f3d_s3_m6=f3d,fxy_s2_m5=fxy,fxz_s2_m5=fxz,number_per_bin=number,
-        unique_particles_per_bin=unique,effective_particles_per_bin=neff,
-        slice_xy_s3_m6=slice_xy,slice_xz_s3_m6=slice_xz)
-    (out/"analysis_summary.json").write_text(json.dumps(summary,indent=2),encoding="utf8")
-    draw_panels(out/"probe_psd_projections",edges,fxy,fxz,r"Reduced PSD (s$^2$ m$^{-5}$)",
-        f"Velocity-integrated projections; {args.dv_kms:g} km/s bins; maximum flight age {meta['max_flight_time_s']:g} s",len(hit_ids),effective,meta)
-    draw_panels(out/"probe_psd_slices",edges,slice_xy,slice_xz,r"3D PSD (s$^3$ m$^{-6}$)",
-        f"Central velocity slabs [{edge[center]/1e3:g}, {edge[center+1]/1e3:g}] km/s in omitted component",len(hit_ids),effective,meta)
-    if args.plot_limit_kms is None:
-        draw_panels(out/"probe_psd_projections_zoom",edges,fxy,fxz,r"Reduced PSD (s$^2$ m$^{-5}$)",
-            f"Velocity-integrated projections; {args.dv_kms:g} km/s bins; all nonzero bins shown",len(hit_ids),effective,meta,zoom=True)
-    print(json.dumps(summary,indent=2))
+    # The production estimator stores the full 1000^3 grid sparsely.
+    # bin_residence remains available as a small dense reference for tests.
+    from analyze_probe import main as sparse_main
+    sparse_main()
 
 
-if __name__=="__main__":
+if __name__ == "__main__":
     main()

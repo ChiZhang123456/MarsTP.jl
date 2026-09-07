@@ -1,0 +1,55 @@
+{
+  "detector_Rm": [
+    -1.5,
+    0.0,
+    1.0
+  ],
+  "cube_side_Rm": 0.2,
+  "source_run_directory": "D:\\Work_Work\\Mars\\MAVEN\\MarsTP\\MarsTP.jl\\outputs\\mc500_rate100_full_20260906a",
+  "coordinate_system": "native MHD Cartesian axes; MSO/MSE provenance not established",
+  "source_sha256": "fa92bd82fe16975ad0d50f4e40ace344e9d41389d6024976d423e6126bc7a5c8",
+  "number_density_m3": 117721.66528407467,
+  "number_density_cm3": 0.11772166528407467,
+  "unique_probe_particles": 2011,
+  "probe_effective_particles": 353.70599615077236,
+  "residence_segments": 124374,
+  "velocity_bin_width_kms": 1.0,
+  "velocity_edges_kms": [
+    -500.0,
+    500.0
+  ],
+  "grid_shape": [
+    1000,
+    1000,
+    1000
+  ],
+  "nonzero_3d_bins": 36733,
+  "plot_limit_kms": 300.0,
+  "velocity_range_kms": {
+    "x": [
+      -185.1092899942511,
+      -5.884101691564924
+    ],
+    "y": [
+      -96.47381445340886,
+      96.613598161928
+    ],
+    "z": [
+      -63.226158947919174,
+      76.52727146264164
+    ]
+  },
+  "volume_averaged_number_flux_vector_m2_s": [
+    -10575032207.563427,
+    7963479.134587184,
+    -130921396.68347324
+  ],
+  "psd_definition": "f3d=sum Q_i*tau_ib/(V*dv^3), units s^3/m^6",
+  "projection_definition": "fxy=sum_z f3d*dv; fxz=sum_y f3d*dv, units s^2/m^5",
+  "storage": "COO indices_xyz are zero-based; omitted bins are exactly zero in this Monte Carlo estimator",
+  "maximum_flight_age_s": 500.0,
+  "limitations": "Finite Monte Carlo sample and 500 s flight-age window; no steady-state convergence claim.",
+  "displayed_density_fraction_xy": 0.9999999999999999,
+  "displayed_density_fraction_xz": 1.0000000000000002,
+  "crossing_events": 4042
+}
