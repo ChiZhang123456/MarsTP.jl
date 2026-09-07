@@ -161,3 +161,7 @@ for the transport equation, delta-function change of variables, volume
 quadrature, crossing treatment, unit table, background assumptions and limits.
 Run `julia --project=. test/runtests.jl` for analytic tests and
 `julia --project=. scripts/smoke_ionosphere.jl` for the local MHD smoke test.
+
+## 轨迹可视化
+
+[src/visualization](src/visualization/README.md) 提供独立 Python 火星、BS/MPB 与二维/三维轨迹绘图，支持从 forward/backward 轨迹文件按物种和粒子 ID 筛选。

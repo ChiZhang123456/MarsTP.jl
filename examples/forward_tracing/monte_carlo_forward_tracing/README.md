@@ -260,7 +260,7 @@ python "$example/plot_library_psd.py" outputs/my_probes
 python examples/forward_tracing/monte_carlo_forward_tracing/plot_monte_carlo_sampling.py
 ```
 
-Python 绘图使用 NumPy、Matplotlib 和 h5py，轨迹图另使用 `py_space_zc`。
+Python 绘图使用 NumPy、Matplotlib 和 h5py，轨迹背景使用 [src/visualization](../../../src/visualization/README.md) 中的火星与 BS/MPB 绘图函数。
 
 | 代码 | 用途 |
 | --- | --- |

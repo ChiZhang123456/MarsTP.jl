@@ -9,7 +9,10 @@ from matplotlib.colors import SymLogNorm
 from matplotlib.collections import LineCollection
 from matplotlib.patches import Circle
 from matplotlib.font_manager import findfont
-from py_space_zc.maven import bs_mpb,plot_mars
+import sys
+_VIS_ROOT = next(p for p in Path(__file__).resolve().parents if (p / "src" / "MarsTP.jl").exists())
+sys.path.insert(0, str(_VIS_ROOT / "src"))
+from visualization.mars import bs_mpb,plot_mars
 out=Path(sys.argv[1])
 case=json.loads((out/'case.json').read_text()) if (out/'case.json').exists() else {'mode':'original','detector_Rm':[0,0,2],'dt_s':-.05}
 probe=case['detector_Rm']

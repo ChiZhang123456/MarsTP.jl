@@ -9,7 +9,10 @@ import matplotlib as mpl
 mpl.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
-from py_space_zc.maven import bs_mpb, plot_mars
+import sys
+_VIS_ROOT = next(p for p in Path(__file__).resolve().parents if (p / "src" / "MarsTP.jl").exists())
+sys.path.insert(0, str(_VIS_ROOT / "src"))
+from visualization.mars import bs_mpb, plot_mars
 
 ROOT = Path(__file__).resolve().parents[2]
 PREVIEW = Path(os.environ.get('TRAJECTORY_PREVIEW', ROOT / 'examples/forward_tracing/images/trajectories_xz_yz_800km.png'))

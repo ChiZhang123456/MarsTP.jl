@@ -12,7 +12,10 @@ mpl.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.collections import LineCollection
 from matplotlib.patches import Circle
-from py_space_zc.maven import bs_mpb, plot_mars
+import sys
+_VIS_ROOT = next(p for p in Path(__file__).resolve().parents if (p / "src" / "MarsTP.jl").exists())
+sys.path.insert(0, str(_VIS_ROOT / "src"))
+from visualization.mars import bs_mpb, plot_mars
 
 ROOT = Path(__file__).resolve().parents[2]
 N = int(os.environ.get('PARTICLE_COUNT', '5000'))
