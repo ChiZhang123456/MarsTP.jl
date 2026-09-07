@@ -303,7 +303,7 @@ function run_monte_carlo(out,c=Config())
         meta["random_stream"]="Xoshiro(seed+cell_id), all N draws in original order"
         meta["weight_formula"]="Q_i = n A max(dot(v_i,er),0) (g_i/gs_i) / N_all_draws"
         meta["density_weight_formula"]="Wn_i = n w_i / sum_cell(w); diagnostic source density shares, not used by detector estimator"
-        meta["weight_reference"]="examples/forward_tracing/monte_carlo_forward_tracing/monte_carlo.md and src/tracing/monte_carlo_weight.jl"
+        meta["weight_reference"]="examples/forward_tracing/monte_carlo_forward_tracing/README.md and src/tracing/monte_carlo_weight.jl"
         meta["sampling_caveat"]="No rate self-normalization; inward samples have Q=0 and are retained without propagation"
         meta["source_flux_column_note"]="source_flux_m2_s is n*norm(U) diagnostic only; rate weights use individual outward radial speed"
     end
@@ -313,7 +313,7 @@ function run_monte_carlo(out,c=Config())
     cp(@__FILE__,joinpath(out,"monte_carlo_shell.snapshot.jl"))
     if rate_mode
         cp(MarsTP.project_path("src","tracing","monte_carlo_weight.jl"),joinpath(out,"monte_carlo_weight.snapshot.jl"))
-        cp(MarsTP.project_path("examples","forward_tracing","monte_carlo_forward_tracing","monte_carlo.md"),joinpath(out,"detector_3d_psd.snapshot.md"))
+        cp(MarsTP.project_path("examples","forward_tracing","monte_carlo_forward_tracing","README.md"),joinpath(out,"detector_3d_psd.snapshot.md"))
     end
     open(joinpath(out,"source_cells.csv"),"w") do io
         println(io,"cell_id,theta_index,phi_index,longitude_deg,latitude_deg,area_m2,flux_m2_s,n_m3,Ti_K,ux_ms,uy_ms,uz_ms")

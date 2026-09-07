@@ -18,7 +18,7 @@
 
 运行生成的本地 `probe_psd_sparse.npz` 保存三维稀疏 PSD、二维投影及完整 200³ 网格的非零值及零基索引，未列出的 bin 是本次抽样的零值。完整统计和速度范围保存在本地 `analysis_summary.json`，这些数据文件不随 GitHub 示例提交。三维积分与两个二维积分都复现同一驻留时间密度。
 
-复现步骤见 [上一级 README](../README.md#已保存轨迹上的三个探头)，当前结果来自与 `forward_psd` 完全共享的 Julia 累积器。计算后，只绘制该探头的库结果：
+复现步骤见 [上一级 README](../README.md)，当前结果来自与 `forward_psd` 完全共享的 Julia 累积器。计算后，只绘制该探头的库结果：
 
 ```powershell
 & $py "$example/plot_library_psd.py" "$reprobe/probe_m1p5_0_1"
