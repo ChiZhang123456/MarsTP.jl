@@ -1,13 +1,13 @@
 using MarsTP, Random, LinearAlgebra
 
-# One local O2+ reservoir patch, Cartesian field frame, area in m^2.
+# One local O2+ prescribed n|U_bulk| injection patch, Cartesian field frame, area in m^2.
 # Choose the patch geometry/area explicitly for your source discretization.
 function sample_outflow_patch(source, position_m, area_m2; N=100, seed=42)
     p = ionosphere_properties(source,position_m)
     return sample_maxwellian_source(N; position_m=position_m/norm(position_m)*source.radius,
         bulk_velocity_m_s=p.Ui, temperature_ev=MarsTP.TP.kB*p.Ti/1.602176634e-19,
         weights=MonteCarloWeight(source_number_density_m3=p.n,sampling_temperature_factor=4.),
-        normal=position_m,area_m2, rng=MersenneTwister(seed))
+        area_m2,flux_model=:bulk_speed, rng=MersenneTwister(seed))
 end
 
 # source = load_ionosphere_source(;altitude_km=400.)

@@ -16,7 +16,7 @@ Base.@kwdef struct Config
     # native cell edges, no duplicate longitude seam or duplicate pole areas
     cell_stride::Int = 1
     batch_size::Int = 256
-    flux_model::String = "reservoir_maxwellian_rate"
+    flux_model::String = "n_bulk_speed_maxwellian"
     sampling_temperature_factor::Float64 = 4.0
     compress_trajectories::Bool = false
 end
@@ -192,7 +192,7 @@ function validate_geometry(path,fields,c)
 end
 
 function release_particles(fields,source,c)
-    c.flux_model in ("n_speed_outward_maxwellian","reservoir_maxwellian_rate") || error("Unsupported flux model")
+    c.flux_model in ("n_bulk_speed_maxwellian","n_speed_outward_maxwellian","reservoir_maxwellian_rate") || error("Unsupported flux model")
     radius=source.radius
     particles=NamedTuple[]
     cells=NamedTuple[]
@@ -209,15 +209,16 @@ function release_particles(fields,source,c)
         m=ionosphere_properties(source,er)
         push!(cells,(;cellid,j,k,area,flux=m.flux,n=m.n,T=m.Ti,U=m.Ui,
             lon=rad2deg(ph),lat=asind(mu)))
-        if c.flux_model=="reservoir_maxwellian_rate"
+        if c.flux_model in ("n_bulk_speed_maxwellian","reservoir_maxwellian_rate")
             # Follow maxwellian_source.jl: one midpoint patch, N UNTRUNCATED draws.
-            # Inward draws remain in N and have zero crossing rate.
+            # Bulk-speed rates retain both velocity signs; reservoir is an explicit legacy mode.
             rng=Xoshiro(c.seed+cellid)
             sampled=sample_maxwellian_source(c.per_cell;position_m=radius*er,
                 bulk_velocity_m_s=m.Ui,temperature_ev=TP.kB*m.Ti/1.602176634e-19,
                 weights=MonteCarloWeight(source_number_density_m3=m.n,
                     sampling_temperature_factor=c.sampling_temperature_factor),
-                normal=m.n>0 ? er : nothing,area_m2=m.n>0 ? area : nothing,rng)
+                normal=er,area_m2=area,rng,
+                flux_model=c.flux_model=="n_bulk_speed_maxwellian" ? :bulk_speed : :reservoir)
             for q in 1:c.per_cell
                 state=sampled.initial_states[q]
                 x=Vec(state[1:3]);v=Vec(state[4:6])
@@ -262,7 +263,9 @@ function run_monte_carlo(out,c=Config())
     fields,source,geometry=validate_geometry(fields.path,fields,c)
     param=MarsTP.mhd_param(fields;species="O2+")
     particles,cells=release_particles(fields,source,c)
-    all(p->p.W==0 || dot(p.v,p.x)>0,particles) || error("Positive-rate non-outward release")
+    if c.flux_model!="n_bulk_speed_maxwellian"
+        all(p->p.W==0 || dot(p.v,p.x)>0,particles) || error("Positive-rate non-outward release")
+    end
     totalrate=sum(p.W for p in particles)
     area=sum(a.area for a in cells)
     c.cell_stride==1 && !isapprox(area,4pi*source.radius^2;rtol=1e-12) && error("Shell area mismatch")
@@ -295,7 +298,7 @@ function run_monte_carlo(out,c=Config())
     meta["detector_interpolation"]="piecewise linear saved endpoints, shared with forward_psd"
     meta["compress_trajectories"]=c.compress_trajectories
     meta["n_positive_rate_particles"]=count(p->p.W>0,particles)
-    rate_mode=c.flux_model=="reservoir_maxwellian_rate"
+    rate_mode=c.flux_model in ("n_bulk_speed_maxwellian","reservoir_maxwellian_rate")
     if rate_mode
         meta["model"]="steady_reservoir_mc_v2"
         meta["velocity_sampling"]="sample_maxwellian_source: untruncated Cartesian Maxwellian at Ts=4Ti; local midpoint patch"
@@ -306,6 +309,14 @@ function run_monte_carlo(out,c=Config())
         meta["weight_reference"]="examples/forward_tracing/monte_carlo_forward_tracing/README.md and src/tracing/monte_carlo_weight.jl"
         meta["sampling_caveat"]="No rate self-normalization; inward samples have Q=0 and are retained without propagation"
         meta["source_flux_column_note"]="source_flux_m2_s is n*norm(U) diagnostic only; rate weights use individual outward radial speed"
+    end
+    if c.flux_model=="n_bulk_speed_maxwellian"
+        meta["model"]="steady_bulk_speed_mc_v3"
+        meta["velocity_sampling"]="untruncated Cartesian Maxwellian at Ts=sampling_temperature_factor*Ti; no radial-sign selection"
+        meta["weight_formula"]="Q_i = n norm(U_bulk) A w_i / sum_cell(w), w=g/gs"
+        meta["sampling_caveat"]="Self-normalized importance estimates have finite-sample bias; patch rates sum exactly to n norm(U_bulk) A"
+        meta["source_flux_column_note"]="source_flux_m2_s = n norm(U_bulk), prescribed injection flux, not net radial surface flux"
+        meta["inner_boundary_note"]="inward launch velocities retain source rate and are immediately absorbed at the source/inner boundary"
     end
     open(joinpath(out,"metadata.toml"),"w") do io; TOML.print(io,meta);end
     cp(MarsTP.project_path("Project.toml"),joinpath(out,"Project.snapshot.toml"))
@@ -380,7 +391,7 @@ if abspath(PROGRAM_FILE)==@__FILE__
     tmax=length(ARGS)>2 ? parse(Float64,ARGS[3]) : 500.0
     dt=length(ARGS)>3 ? parse(Float64,ARGS[4]) : 0.1
     per_cell=length(ARGS)>4 ? parse(Int,ARGS[5]) : 100
-    flux_model=length(ARGS)>5 ? ARGS[6] : "reservoir_maxwellian_rate"
+    flux_model=length(ARGS)>5 ? ARGS[6] : "n_bulk_speed_maxwellian"
     compress_trajectories=length(ARGS)>6 ? parse(Bool,ARGS[7]) : false
     ShellMonteCarlo.main(out,ShellMonteCarlo.Config(;cell_stride=stride,tmax,dt,per_cell,flux_model,compress_trajectories,batch_size=1024))
 end

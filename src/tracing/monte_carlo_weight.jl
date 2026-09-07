@@ -40,7 +40,7 @@ end
 """
     sample_maxwellian_source(N; position_m, bulk_velocity_m_s, temperature_ev,
         species="O2+", weights=MonteCarloWeight(), rng=Random.default_rng(),
-        normal=nothing, area_m2=nothing)
+        normal=nothing, area_m2=nothing, flux_model=:bulk_speed)
 
 Sample N velocities from an untruncated drifting Maxwellian at Ts=factor*T.
 Return initial_states ([x,y,z,vx,vy,vz], m and m/s), dimensionless
@@ -48,17 +48,20 @@ importance_weights, density_weights_m3 (nothing for unitless mode), and
 macro_weights (density weights or unit_particle_weight*importance_weights).
 The Cartesian position and velocity must use the field coordinate frame.
 
-If an outward normal and source patch area are supplied, also return
-rate_weights_s = n*A*max(v dot normal,0)*importance_weight/N [s^-1].
-This estimates outward crossing of a reservoir VDF, with NO self-normalization
-or rejection of inward samples. Only positive-rate states need tracing.
-Each patch needs its own N and local moments. This is not the prescribed
-n*norm(U)*g thin-sheet injection model used by backtracing.
+If area_m2 is supplied, the default flux_model=:bulk_speed returns
+rate_weights_s = n*A*norm(U)*importance_weight/sum(importance_weights) [s^-1].
+This prescribed source injection uses the bulk speed, with no velocity-sign
+selection. Sum of patch rates is n*A*norm(U); zero bulk speed gives zero rate.
+Self-normalized importance weights have finite-sample bias for distribution
+estimates. normal is optional and does not affect bulk-speed rates.
+The explicit legacy flux_model=:reservoir requires a normal and returns
+n*A*max(v dot normal,0)*importance_weight/N instead.
+Each patch needs its own N and local moments.
 No propagation, collisions, escape classification, or files are produced here.
 """
 function sample_maxwellian_source(N::Integer; position_m, bulk_velocity_m_s,
         temperature_ev, species="O2+", weights=MonteCarloWeight(),
-        rng=Random.default_rng(), normal=nothing, area_m2=nothing)
+        rng=Random.default_rng(), normal=nothing, area_m2=nothing, flux_model=:bulk_speed)
     N > 0 || throw(ArgumentError("N must be positive"))
     x,U = SVector{3,Float64}(position_m),SVector{3,Float64}(bulk_velocity_m_s)
     all(isfinite,x) && all(isfinite,U) || throw(ArgumentError("nonfinite state"))
@@ -68,28 +71,36 @@ function sample_maxwellian_source(N::Integer; position_m, bulk_velocity_m_s,
     mass = TP.SpeciesDict[species].m
     sigma = thermal_speed_from_temperature_ev(temperature_ev*c,mass)/sqrt(2)
     thermal_speed_from_temperature_ev(temperature_ev,mass)
-    (normal === nothing) == (area_m2 === nothing) ||
-        throw(ArgumentError("provide both normal and area_m2"))
+    flux_model in (:bulk_speed,:reservoir) || throw(ArgumentError("unknown flux_model"))
+    normal !== nothing && area_m2 === nothing && throw(ArgumentError("normal requires area_m2"))
+    area_m2 === nothing || _mc_positive(area_m2) || throw(ArgumentError("positive finite area required"))
+    flux_model==:reservoir && area_m2!==nothing && normal===nothing &&
+        throw(ArgumentError("reservoir rate requires normal"))
     er = if normal === nothing
         nothing
     else
         e = SVector{3,Float64}(normal)
-        all(isfinite,e) && _mc_positive(norm(e)) && _mc_positive(area_m2) && n>0 ||
-            throw(ArgumentError("rate weights require positive density/area and finite nonzero normal"))
+        all(isfinite,e) && _mc_positive(norm(e)) ||
+            throw(ArgumentError("finite nonzero normal required"))
         normalize(e)
     end
     states = Vector{SVector{6,Float64}}(undef,N)
     w = Vector{Float64}(undef,N)
-    rates = er === nothing ? nothing : zeros(N)
+    rates = area_m2 === nothing ? nothing : zeros(N)
     for i in 1:N
         v = U + sigma*SVector{3,Float64}(randn(rng,3))
         states[i] = SVector{6,Float64}(x...,v...)
         w[i] = maxwellian_importance_weight_3d(U,v,temperature_ev,temperature_ev*c; mass_kg=mass)
-        rates === nothing || (rates[i] = n*area_m2*max(dot(v,er),0)*w[i]/N)
+        if rates !== nothing && flux_model==:reservoir
+            rates[i] = n*area_m2*max(dot(v,er),0)*w[i]/N
+        end
     end
     total = sum(w)
     _mc_positive(total) && all(isfinite,w) || error("Importance weights underflowed/overflowed; adjust sampling temperature")
     density = n>0 ? particle_density_weight.(w,n,total) : nothing
+    if rates !== nothing && flux_model==:bulk_speed
+        rates .= (n*area_m2*norm(U)).*(w./total)
+    end
     macro_values = density === nothing ? weights.unit_particle_weight*w : density
     return (; initial_states=states, importance_weights=w, density_weights_m3=density,
         macro_weights=macro_values, rate_weights_s=rates, effective_sample_size=total^2/sum(abs2,w),

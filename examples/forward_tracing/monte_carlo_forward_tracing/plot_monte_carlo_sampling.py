@@ -28,23 +28,20 @@ def sample_demo(count=100_000, seed=20260907):
     # d=2: g2/gs2 = factor * exp[-d2/(2 sigma^2)*(1-1/factor)].
     importance = factor*np.exp(-d2/(2*sigma**2)*(1-1/factor))
     density_weight = n*importance/importance.sum()
-    # Normal is (-1,0,0); inward draws retained with zero rate, no rejection.
-    rate_weight = n*area*np.maximum(-velocity[:,0],0)*importance/count
-    un = -bulk[0]
-    phi = math.exp(-.5*(un/sigma)**2)/math.sqrt(2*math.pi)
-    cdf = .5*math.erfc(-un/sigma/math.sqrt(2))
-    analytic_rate = n*area*(sigma*phi+un*cdf)
-    rate_se = math.sqrt(count)*np.std(rate_weight,ddof=1)
+    # Prescribed n|U_bulk| source rate, independent of individual velocity sign.
+    rate_weight = area*np.linalg.norm(bulk)*density_weight
+    analytic_rate = n*area*np.linalg.norm(bulk)
     neff = importance.sum()**2/np.sum(importance**2)
     weighted_mean = np.sum(density_weight[:,None]*velocity,axis=0)/n
     assert np.isclose(density_weight.sum(),n,rtol=1e-14)
-    assert np.all(rate_weight[velocity[:,0]>=0]==0)
+    assert np.all(rate_weight>0)
+    assert np.any(velocity[:,0]<0) and np.any(velocity[:,0]>0)
     assert np.all(abs(weighted_mean-bulk)<6*sigma/math.sqrt(neff))
-    assert abs(rate_weight.sum()-analytic_rate)<6*rate_se
+    assert np.isclose(rate_weight.sum(),analytic_rate,rtol=1e-14)
     return dict(n=n,mass=mass,qe=qe,temperature_ev=temperature_ev,bulk=bulk,
         factor=factor,area=area,sigma=sigma,velocity=velocity,importance=importance,
         density_weight=density_weight,rate_weight=rate_weight,analytic_rate=analytic_rate,
-        rate_se=rate_se,neff=neff,weighted_mean=weighted_mean)
+        neff=neff,weighted_mean=weighted_mean)
 
 
 def main():
@@ -77,18 +74,16 @@ def main():
                       cmap='turbo',norm=Normalize(0,weights.max()),linewidths=0,rasterized=True)
         ax.set_title(title,loc='left')
         fig.colorbar(im,ax=ax,label=label,shrink=.79)
-    axes[2].axvline(0,color='#555555',ls=':',lw=.8)
     for ax in axes:
         ax.set(xlim=np.array(xlim)/1000,ylim=np.array(ylim)/1000,
                xlabel=r'$v_x$ (km/s)',ylabel=r'$v_y$ (km/s)',aspect='equal')
     fig.suptitle('O$_2^+$: $n$ = 5 cm$^{-3}$, $U_x$ = -10 km/s, $T$ = 10 eV, $v_z$ = 0\n'
-                 f'{args.count:,} Maxwellian samples; '+r'$T_s=4T$; source area = 1 m$^2$, normal = $-\hat{x}$')
+                 f'{args.count:,} Maxwellian samples; '+r'$T_s=4T$; source area = 1 m$^2$, $F=n|\mathbf{U}|$')
     args.output.parent.mkdir(parents=True,exist_ok=True)
     fig.savefig(args.output,dpi=220,bbox_inches='tight')
     plt.close(fig)
     print(f'density sum = {d["density_weight"].sum():.12g} m^-3')
     print(f'rate sum = {d["rate_weight"].sum():.12g} s^-1; analytic = {d["analytic_rate"]:.12g} s^-1')
-    print(f'rate discrepancy = {(d["rate_weight"].sum()-d["analytic_rate"])/d["rate_se"]:.4f} MC standard errors')
     print(f'weighted mean velocity = {d["weighted_mean"]/1000} km/s; Neff = {d["neff"]:.1f}')
     print(f'sigma = {d["sigma"]/1000:.6f} km/s; saved {args.output}')
 

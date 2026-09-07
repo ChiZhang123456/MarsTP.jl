@@ -3,7 +3,7 @@
 Ported from [MarsASPEN.jl](https://github.com/ChiZhang123456/MarsASPEN.jl/blob/main/src/monte_carlo_weight.jl), blob `41d84d67602c5fa284f172a540cccc46531ca8e0`.
 The original file supplies weights, not random draws or a transport solver.
 MarsTP adds `sample_maxwellian_source`; default particle mass is O2+, not H.
-Existing untracked shell Monte Carlo scripts are independent and unchanged.
+The tracked shell example defaults to the prescribed bulk-speed injection model below.
 
 For physical temperature T, sampling Maxwellian temperature Ts=c*T and bulk velocity U,
 each Cartesian velocity component is sampled as U_k+sqrt(e*Ts/m)*randn().
@@ -29,25 +29,22 @@ mode, so `density_weights_m3` is then `nothing`; it does not denote a physical
 zero-density ensemble. `macro_weights` is Wn, or unit_particle_weight*w in
 unitless mode. A density weight is not a number of particles or a rate.
 
-For an explicitly specified patch area A and outward unit normal er:
+For an explicitly specified patch area A, the default `flux_model=:bulk_speed` uses
 
-    rate_weights_s[i] = n*A*max(dot(v_i,er),0)*w_i/N  [s^-1]
+    F = n*norm(U_bulk)                                      [m^-2 s^-1]
+    rate_weights_s[i] = F*A*w_i/sum(w)                       [s^-1]
 
-N is the total number of Maxwellian draws, including inward ones. Inward draws
-have zero rate; filter using their indices and retain the corresponding
-weights. Do not renormalize by the number of retained particles. Sum these
-weights to estimate the outward source rate of this patch. This estimator
-represents a reservoir Maxwellian crossing a surface. At U=0 it has the
-analytic total n*A*sqrt(e*T/m)/sqrt(2*pi), which is not zero.
+No velocity-sign selection is applied. Both signs of sampled velocity and bulk radial velocity are allowed. The speed factor is the local bulk speed, not the speed of each sample. Total patch injection is exactly `n*norm(U_bulk)*A`. Zero density or zero bulk speed yields zero rates. A normal is optional and does not affect these rates.
 
-This differs from the existing backtrace thin-sheet source F*g with
-F=n*norm(U). Do not compare the two as identical physical sources. It also
-differs from the existing shell example's outward-conditioned Maxwellian
-with a separately prescribed injection flux. No such model is silently
-replaced by this port. See `maxwellian_source.jl` for the explicit local MHD
-moment adapter and forward-tracing connection. A shell simulation needs a
-specified area discretization and independent reproducible RNG streams per
-patch; one position is only a local patch approximation.
+This is a prescribed source injection model with full Maxwellian velocity support. It is not a net radial or thermal half-space crossing flux. The same scalar flux definition is used by the backtrace thin-sheet source, although the boundary handling and numerical estimators must still be considered separately. In the shell example the 500 km source remains the absorbing boundary: inward launches retain their rate and terminate immediately with status `inner`.
+
+The explicit legacy option `flux_model=:reservoir` requires an outward normal er and retains
+
+    rate_weights_s[i] = n*A*max(dot(v_i,er),0)*w_i/N          [s^-1]
+
+In that legacy mode N includes all draws, inward samples have zero rate, and no rate self-normalization is applied. At zero bulk drift its analytic total is `n*A*sqrt(e*T/m)/sqrt(2*pi)`. This legacy option is not the default.
+
+See `maxwellian_source.jl` for the local MHD moment adapter and [the shell example](monte_carlo_forward_tracing/README.md). Each patch needs its own area, local moments and reproducible random stream.
 
 After propagation, sum rate weights for particles classified as escaped to
 estimate escape rate [s^-1], counting each injected particle once. For a
@@ -61,8 +58,7 @@ it diagnoses velocity importance sampling, not uncertainty of escape flux.
 
 Validation: `julia --compiled-modules=existing --project=. test/runtests.jl`.
 Tests cover SI thermal speed, fixed-seed reproducibility, normalization,
-invalid inputs, weighted second moments, and analytic zero-drift outward
-flux at sampling-temperature factors 1 and 4. No large trajectory simulation
+invalid inputs, weighted second moments, bulk-speed rate normalization, independence from normal direction, both sampled velocity signs, zero-bulk rates, and the explicit legacy reservoir analytic flux. No large trajectory simulation
 is part of these tests. No new external dependency is needed; Random is a
 Julia standard library.
 

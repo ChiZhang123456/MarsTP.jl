@@ -2,6 +2,29 @@ using Test
 include("monte_carlo_shell.jl")
 using .ShellMonteCarlo, MarsTP, StaticArrays, LinearAlgebra, Random
 const MC=ShellMonteCarlo
+@testset "Bulk-speed shell source without sign selection" begin
+    radius=Rm+500e3
+    fields=MHDFields([radius,Router],[0.,pi/2,pi],[0.,pi,2pi],zeros(3,2,3,3),zeros(3,2,3,3),:total,"")
+    U=SA[-1000.,200.,300.]
+    source=IonosphereSource(x->1e6,x->1000.,(x->U[1],x->U[2],x->U[3]),radius)
+    c=MC.Config(per_cell=1000)
+    @test c.flux_model=="n_bulk_speed_maxwellian"
+    particles,cells=MC.release_particles(fields,source,c)
+    @test sum(p.W for p in particles) ≈ 1e6*norm(U)*4pi*radius^2
+    @test all(p->p.W>0,particles)
+    @test any(p->dot(p.x,p.v)<0,particles)
+    @test any(p->dot(p.x,p.v)>0,particles)
+    for cell in cells
+        localp=filter(p->p.cellid==cell.cellid,particles)
+        @test sum(p.W for p in localp) ≈ cell.flux*cell.area
+        @test all(p->isapprox(p.W,cell.area*norm(U)*p.density_weight),localp)
+    end
+    sp=MarsTP.TP.SpeciesDict["O2+"]
+    zero_field=(x,t)->SA[0.,0.,0.]
+    p=first(filter(p->dot(p.x,p.v)<0,particles))
+    r=MC.trace_particle(p.x,p.v,(sp.q/sp.m,sp.m,zero_field,zero_field,nothing),MC.Config(tmax=1.))
+    @test r.status=="inner" && r.time==0
+end
 @testset "Source sampling and detector geometry" begin
     er=SA[1.,0.,0.];U=SA[-1000.,200.,300.];sigma=1000.
     rng=Xoshiro(19)

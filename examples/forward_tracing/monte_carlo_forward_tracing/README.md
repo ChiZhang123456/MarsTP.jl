@@ -10,9 +10,9 @@ Monte Carlo represents a continuous velocity distribution with a finite set of w
 
 ![Maxwellian and Monte Carlo particle weights](monte_carlo_sampling.png)
 
-The [plotting script](plot_monte_carlo_sampling.py) uses O₂⁺ at density 5 cm⁻³ (5×10⁶ m⁻³), bulk velocity (−10,0) km/s and physical temperature 10 eV. It draws 100,000 two-dimensional velocities with vz=0. The **sampling Maxwellian** has temperature 40 eV. A source area of **1 m²** with normal **−X** defines the particle-rate weights.
+The [plotting script](plot_monte_carlo_sampling.py) uses O₂⁺ at density 5 cm⁻³ (5×10⁶ m⁻³), bulk velocity (−10,0) km/s and physical temperature 10 eV. It draws 100,000 two-dimensional velocities with vz=0. The **sampling Maxwellian** has temperature 40 eV. A source area of **1 m²** and bulk speed **10 km/s** define the prescribed particle-rate weights. Both signs of each sampled velocity component are retained.
 
-All three panels use turbo. The left panel shows the analytical two-dimensional Maxwellian (s² m⁻⁵). The middle and right panels color individual samples by `density_weight` (m⁻³) and `flux_weight` (s⁻¹), respectively. Gray points have zero crossing rate.
+All three panels use turbo. The left panel shows the analytical two-dimensional Maxwellian (s² m⁻⁵). The middle and right panels color individual samples by `density_weight` (m⁻³) and `flux_weight` (s⁻¹), respectively. The rate weight is the density weight multiplied by area and bulk speed. There is no velocity-sign cutoff or shaded excluded half-plane.
 
 ### 1.2 Maxwellian sampling and importance weights
 
@@ -55,14 +55,19 @@ $$
 
 `particle_density_weight` evaluates this expression.
 
-Let A be source area in m², n̂ a dimensionless unit normal, v_i and v_n,i velocities in m/s, n the number density in m⁻³, and N and w_i dimensionless. The particle-rate weight Q_i is in s⁻¹, treating particle number as a count:
+Let A be source area in m² and U the local MHD bulk velocity in m/s. The prescribed scalar source flux F is in m⁻² s⁻¹ and particle-rate weight Q_i is in s⁻¹:
 
 $$
-v_{n,i}=\mathbf v_i\cdot\hat{\mathbf n},\qquad
-Q_i=\frac{nA}{N}\max(v_{n,i},0)w_i.
+F=n|\mathbf U|,\qquad
+Q_i=FA\frac{w_i}{\sum_jw_j}=A|\mathbf U|W_i^{(n)},\qquad
+\sum_iQ_i=n|\mathbf U|A.
 $$
 
-Q_i corresponds to `rate_weights_s`, called `flux_weight` in the illustration. Inward samples have zero rate; N includes all draws. The same area-crossing expression applies to other normalized velocity distributions when the appropriate importance ratio is supplied.
+`sample_maxwellian_source(...; area_m2=A, flux_model=:bulk_speed)` evaluates this model by default. No normal is required. Both inward and outward velocities receive weights from the full drifting Maxwellian. Neither the bulk radial velocity nor the sampled radial velocity is used as a sign filter or rate factor. The factor is the **bulk speed**, not the speed of each sampled particle. A zero bulk speed gives zero injected rate, even at finite temperature.
+
+This is a prescribed source injection model. It is not the signed flux through a sphere or the positive-half-space thermal crossing flux. The per-cell normalization fixes total injection exactly; self-normalized importance estimates of the velocity distribution have finite-sample bias, so convergence with particles per cell and effective sample size should be checked.
+
+For reproducibility of earlier runs, `flux_model=:reservoir` in the sampler retains the previous `n A max(v dot normal,0) w/N` estimator and requires a normal. The shell example selects it explicitly with `flux_model="reservoir_maxwellian_rate"`. The older conditional-outward model is also available only by explicit selection. Neither is the default.
 
 ### 1.4 The 500 km ionospheric source
 
@@ -72,7 +77,13 @@ $$
 A_{\rm cell}=r_s^2(\cos\theta_0-\cos\theta_1)(\phi_1-\phi_0).
 $$
 
-Each angular cell supplies 100 three-dimensional velocity samples. Weights use the local density, cell area and radial particle velocity. The sampling Maxwellian temperature is four times the local physical temperature. No volume production is included outside the ionosphere.
+Each angular cell supplies 100 three-dimensional velocity samples. Weights use the local density, cell area and bulk-speed magnitude. The sampling Maxwellian temperature is four times the local physical temperature. No volume production is included outside the ionosphere. Inward launch velocities are retained with their positive source weights, but the unchanged absorbing boundary terminates them immediately at time zero with status `inner`. This is a transport boundary condition, not a sampling rejection. Escaping or detector-reaching rates therefore need not equal the prescribed injection rate.
+
+### 1.5 Bulk-speed flux maps
+
+![O2+ and O+ bulk-speed flux at 200, 400 and 600 km](bulk_speed_flux_200_400_600km.png)
+
+See [map definitions, source data and reproduction](bulk_speed_flux_maps.md). All six panels share one turbo logarithmic scale. O+ is shown for comparison; this forward-tracing example still propagates O2+.
 
 ## 2. Forward tracing
 
@@ -221,7 +232,9 @@ $$
 Q=nuL^2,\qquad \tau=L/u,\qquad \frac{Q\tau}{L^3}=n.
 $$
 
-Faster particles have higher crossing rates but shorter residence times. Their product recovers density.
+This monoenergetic beam identity checks the detector estimator. For the prescribed broad-distribution source, individual rates scale with bulk speed and importance weight, so the source is not a thermal reservoir crossing model.
+
+> Existing trajectory and detector images below were generated before the bulk-speed source update. They remain historical examples and have not been recomputed with the new weights. Rerun tracing before using them as predictions of the new source model.
 
 ## 4. Running and saving
 
@@ -231,7 +244,7 @@ Run from the repository root using the Julia project environment. Sampling and t
 include("examples/forward_tracing/monte_carlo_forward_tracing/monte_carlo_shell.jl")
 ShellMonteCarlo.run_monte_carlo("outputs/my_run",
     ShellMonteCarlo.Config(per_cell=100, dt=0.1, tmax=500., batch_size=1024,
-                          flux_model="reservoir_maxwellian_rate", compress_trajectories=false))
+                          flux_model="n_bulk_speed_maxwellian", compress_trajectories=false))
 ```
 
 [write_trajectory_batch](../../../src/tracing/trajectory_io.jl) saves batches of paths and weights. Position, velocity and time use m, m/s and s. `rate_weights_s` is in s⁻¹ and `source_density_weights_m3` in m⁻³:
@@ -270,3 +283,15 @@ Python requires NumPy, Matplotlib and h5py. Trajectory backgrounds use [src/visu
 | [plot_trajectories.py](plot_trajectories.py) | Trajectory projections |
 | [analyze_saved_probes.jl](analyze_saved_probes.jl) | Detector PSD from saved paths |
 | [plot_library_psd.py](plot_library_psd.py) | Integrated two-dimensional VDFs |
+
+## Validation of the bulk-speed update
+
+Validated with Julia 1.12.6 and TestParticle 0.23.3. The package suite passed 420 assertions and the shell suite passed 240 assertions. Checks include exact patch-rate normalization, both radial velocity signs with positive weights, independence from normal direction, zero rate at zero bulk speed, the explicit legacy estimator, and immediate absorption of inward launches.
+
+A local-field smoke run used 6 source cells, 10 particles per cell, dt=0.1 s and maximum age 0.2 s. All 60 saved particles had positive rate weights; 28 inward launches terminated at time zero and 32 reached the time limit. Total prescribed injection was 2.984432090205178e21 s^-1 for the sampled cells, with per-cell sums and all saved rate weights verified. This short run is an implementation check, not an escape-rate or detector-PSD convergence result. The full million-particle ensemble was not rerun.
+
+```powershell
+julia --startup-file=no --compiled-modules=existing --project=. test/runtests.jl
+julia --startup-file=no --compiled-modules=existing --project=. examples/forward_tracing/monte_carlo_forward_tracing/test_monte_carlo.jl
+julia --startup-file=no --compiled-modules=existing --project=. examples/forward_tracing/monte_carlo_forward_tracing/monte_carlo_shell.jl outputs/new_bulk_speed_smoke 2000 0.2 0.1 10
+```

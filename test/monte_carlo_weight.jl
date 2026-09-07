@@ -15,7 +15,7 @@ using Random, LinearAlgebra
         n,A,N = 1e6,2e6,40000
         s = sample_maxwellian_source(N;args...,rng=MersenneTwister(42),
             weights=MonteCarloWeight(sampling_temperature_factor=factor,source_number_density_m3=n),
-            normal=(1.,0.,0.),area_m2=A)
+            normal=(1.,0.,0.),area_m2=A,flux_model=:reservoir)
         @test sum(s.density_weights_m3) ≈ n
         @test abs(sum(s.importance_weights)/N-1) < 0.025
         sigma = thermal_speed_from_temperature_ev(1.,mass)/sqrt(2)
@@ -24,4 +24,23 @@ using Random, LinearAlgebra
         @test isapprox(v2,3sigma^2;rtol=0.03)
         @test all(i -> s.initial_states[i][4]>0 || s.rate_weights_s[i]==0,1:N)
     end
+end
+
+@testset "Prescribed bulk-speed source rate" begin
+    n,A,N=2e6,3e4,20000
+    U=(-1000.,200.,300.)
+    args=(;position_m=(Rm+500e3,0.,0.),bulk_velocity_m_s=U,temperature_ev=1.,
+        weights=MonteCarloWeight(sampling_temperature_factor=4.,source_number_density_m3=n),area_m2=A)
+    s=sample_maxwellian_source(N;args...,rng=MersenneTwister(18))
+    @test sum(s.rate_weights_s) ≈ n*A*norm(U)
+    @test s.rate_weights_s ≈ A*norm(U).*s.density_weights_m3
+    @test any(v->v[4]<0,s.initial_states) && any(v->v[4]>0,s.initial_states)
+    @test all(>(0),s.rate_weights_s)
+    # Changing the normal must not change states or bulk-speed weights.
+    b=sample_maxwellian_source(N;args...,normal=(-1.,0.,0.),rng=MersenneTwister(18))
+    @test s.initial_states==b.initial_states
+    @test s.rate_weights_s==b.rate_weights_s
+    z=sample_maxwellian_source(100;args...,bulk_velocity_m_s=(0.,0.,0.),rng=MersenneTwister(18))
+    @test all(iszero,z.rate_weights_s)
+    @test_throws ArgumentError sample_maxwellian_source(10;args...,flux_model=:invalid)
 end
