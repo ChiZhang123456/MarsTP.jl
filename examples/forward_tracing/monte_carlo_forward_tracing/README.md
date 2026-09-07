@@ -1,6 +1,6 @@
 # O₂⁺ Monte Carlo forward tracing, 500 km source and cubic detector
 
-此示例从 500 km 电离层边界释放 O₂⁺，保存每个粒子的权重、位置、速度，并由探头内的驻留时间建立三维速度分布。理论推导见 [monte_carlo.md](monte_carlo.md)。本目录提供实际运行脚本与 PNG，不包含约 48.3 GB 的原始轨迹或 MHD 输入。
+此示例从 500 km 电离层边界释放 O₂⁺，保存每个粒子的权重、位置、速度，并由探头内的驻留时间建立三维速度分布。理论推导见 [monte_carlo.md](monte_carlo.md)。本目录提供实际运行脚本与 PNG，不包含约 48.3 GB 的原始轨迹或 MHD 输入，也不提交运行生成的 JSON、NPZ 数据文件。
 
 ## 图
 
@@ -16,7 +16,7 @@
 
 从正率且实际传播时间大于 0 的粒子中，用 NumPy `default_rng(20260906)` 蓄水池抽样等概率选出 **5000** 条，不优先挑选探头命中者。颜色表示终止原因：`inner` 返回 500 km，`outer` 到达 4 Rm，`time_limit` 达到 500 s。这是轨迹示意图，线条没有按物理权重加粗或重采样。
 
-绘图读取已保存的实际轨迹，每条最多显示 300 个均匀索引点，保留首尾点；此降采样仅用于显示，积分、探头统计和原始数据均保持 0.1 s。选择 ID 保存在 [trajectories_5000.selection.json](trajectories_5000.selection.json)。
+绘图读取已保存的实际轨迹，每条最多显示 300 个均匀索引点，保留首尾点；此降采样仅用于显示，积分、探头统计和原始数据均保持 0.1 s。绘图脚本会在本地生成 `trajectories_5000.selection.json`，记录选择的 ID；该文件不随示例提交。
 
 背景使用 `py_space_zc.maven.bs_mpb` 和 `plot_mars`。XZ、XY 中的虚线、点线分别为库内 BS、MPB 经验 X–ρ 曲线，假定 +X 朝向太阳，仅作参考，不是从本次 MHD 提取的边界。YZ 不画这种二维曲线。圆盘是火星，外侧灰圆是 500 km 释放面，洋红方框是探头投影。**数据仍标为原生 MHD 笛卡尔坐标，尚未核实其 MSO/MSE 来源**，因此不能据参考曲线判断边界符合程度。
 
@@ -51,7 +51,7 @@ face_flux_m2_s = Q_i / A_face                             [m^-2 s^-1]
 
 ## 公共计算方法
 
-本目录当前 PNG 和 NPZ 直接来自 [detector_psd_forward.jl](../../../src/tracing/detector_psd_forward.jl) 使用的公共计算核心 [ForwardPSDAccumulator](../../../src/tracing/forward_psd_accumulator.jl)。内存入口 `forward_psd`、磁盘入口 `forward_psd_saved` 和本例的一次扫描三个探头均调用同一个 `accumulate_forward_psd!`，不再独立运行 Python 分箱算法。
+本目录当前 PNG 直接来自 [detector_psd_forward.jl](../../../src/tracing/detector_psd_forward.jl) 使用的公共计算核心 [ForwardPSDAccumulator](../../../src/tracing/forward_psd_accumulator.jl)。内存入口 `forward_psd`、磁盘入口 `forward_psd_saved` 和本例的一次扫描三个探头均调用同一个 `accumulate_forward_psd!`，不再独立运行 Python 分箱算法。
 
 每个保存段的位置、速度都做线性插值；立方体采用 `[lower,upper)`，速度网格最后一个上边界包含在内。速度范围外的贡献单独报告，不默默截断或重新归一化。探头边界交点不重新调用 Boris 或读取 MHD 场。
 
@@ -69,7 +69,7 @@ r3 = forward_psd_saved("outputs/my_run"; settings..., option="3D", storage=:spar
 rxy = forward_psd_saved("outputs/my_run"; settings..., option="Vx-Vy")
 ```
 
-`vgrid=200` 是每轴 bin 数，范围 ±500 km/s 对应宽度 5 km/s。`storage=:dense` 保留原有数组接口；`:sparse` 返回一基 bin 元组到 PSD 值的 Dict。已发布 NPZ 转为零基 COO 索引。重复调用 `forward_psd_saved` 会重复读取磁盘，因此本例多探头使用下述一次扫描入口。
+`vgrid=200` 是每轴 bin 数，范围 ±500 km/s 对应宽度 5 km/s。`storage=:dense` 保留原有数组接口；`:sparse` 返回一基 bin 元组到 PSD 值的 Dict。运行生成的 NPZ 转为零基 COO 索引。重复调用 `forward_psd_saved` 会重复读取磁盘，因此本例多探头使用下述一次扫描入口。
 
 ## 保存约 50 GB 轨迹的函数
 
@@ -135,7 +135,7 @@ julia --startup-file=no --compiled-modules=existing --threads=12 --project=. "$e
 
 `reprobe_saved.py` 兼容入口转发到 Julia；`analyze_monte_carlo.py`、`analyze_probe.py` 的命令行转发到库结果绘图。其中旧 Python 分箱函数只保留为独立回归参考，不用于当前发布结果。`synchronize_reprobe.jl` 已停用，会明确提示使用新的公共入口，防止误用旧 Boris 交点处理。
 
-每个探头输出 `library_psd.jld2`、`library_summary.toml`、`probe_residence.csv`，绘图步骤另存 PNG、`probe_psd_sparse.npz`、`analysis_summary.json`、逐粒子权重/驻留时间 CSV、穿面通量/速度 CSV。完整扫描成功后才写入 `analysis_complete.toml`。已发布的小型 NPZ 包含三维非零值、零基索引、完整边界和二维投影：
+每个探头输出 `library_psd.jld2`、`library_summary.toml`、`probe_residence.csv`，绘图步骤另存 PNG、`probe_psd_sparse.npz`、`analysis_summary.json`、逐粒子权重/驻留时间 CSV、穿面通量/速度 CSV。完整扫描成功后才写入 `analysis_complete.toml`。运行生成的本地 NPZ 包含三维非零值、零基索引、完整边界和二维投影：
 
 ```python
 import numpy as np
@@ -156,7 +156,7 @@ with np.load('probe_psd_sparse.npz') as a:
 
 当前图来自 `mc500_library_psd_20260906`，公共接口完整读取原运行的 992 个批次和 1,015,300 个粒子组。三个探头均满足 `sum(f3d)*dv³ = sum(fxy)*dv² = sum(fxz)*dv² = sum(Q*tau)/V`，速度范围外密度为零。色标独立归一化，不宜只凭颜色跨图比较。特别是 (0,0,2) 的有效样本数约 9.7，5 km/s 细结构仍受抽样噪声影响。
 
-相较以前的 Boris 交点重算版本，密度与命中数不变，六个二维投影的相对 L1 差异最大 2.48×10⁻⁶，约 0.00025%。详见 [method_comparison.json](method_comparison.json)。旧 `original_probe_validation.json` 是旧交点方法的历史校验，不代表当前方法。
+相较以前的 Boris 交点重算版本，密度与命中数不变，六个二维投影的相对 L1 差异最大 2.48×10⁻⁶，约 0.00025%。这一比较为本次方法统一时的验证结果。
 
 ## 验证与限制
 
