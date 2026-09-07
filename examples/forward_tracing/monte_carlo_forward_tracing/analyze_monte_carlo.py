@@ -1,7 +1,7 @@
 """Re-bin finite-volume O2+ Monte Carlo residence records in SI units.
 
 Usage: python analyze_monte_carlo.py RUN_DIR --output-dir NEW_DIR
-Defaults: 1 km/s bins on each axis from -500 to 500 km/s.
+Defaults: 5 km/s bins on each axis from -500 to 500 km/s.
 The panels integrate over the entire omitted velocity axis; no slices.
 """
 from pathlib import Path
@@ -124,7 +124,7 @@ def draw_panels(path, edges, a, b, label, subtitle, hits, neff, meta, zoom=False
 
 
 def main():
-    # The production estimator stores the full 1000^3 grid sparsely.
+    # The production estimator stores the full 200^3 grid sparsely.
     # bin_residence remains available as a small dense reference for tests.
     from analyze_probe import main as sparse_main
     sparse_main()

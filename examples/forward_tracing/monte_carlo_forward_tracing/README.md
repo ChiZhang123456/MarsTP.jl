@@ -6,9 +6,9 @@
 
 ![Velocity-integrated PSD](probe_psd_projections.png)
 
-两个投影分别积分掉 vz、vy，单位为 **s² m⁻⁵**。三维速度网格各轴从 −500 到 500 km/s，宽度 **1 km/s**，共 **1000³** 个 bin；绘图 xlim、ylim 均为 **[−300, 300] km/s**。使用 turbo、对数色标和 Arial，PNG 图底部不加说明文字。灰色表示没有抽样贡献，无平滑。
+两个投影分别积分掉 vz、vy，单位为 **s² m⁻⁵**。三维速度网格各轴从 −500 到 500 km/s，宽度 **5 km/s**，共 **200³** 个 bin；绘图 xlim、ylim 均为 **[−300, 300] km/s**。使用 turbo、对数色标和 Arial，PNG 图底部不加说明文字。灰色表示没有抽样贡献，无平滑。
 
-三维网格以 COO 稀疏格式保存非零 bin，未保存的 bin 为本次抽样估计中的零值。先计算完整三维 PSD，再对完整的被省略速度轴求和乘以 Δv = 1000 m/s，得到二维投影。显示窗口仍为 ±300 km/s，三个探头的全部信号都在此窗口内。这里不再输出零速度切片。
+三维网格以 COO 稀疏格式保存非零 bin，未保存的 bin 为本次抽样估计中的零值。先计算完整三维 PSD，再对完整的被省略速度轴求和乘以 Δv = 5000 m/s，得到二维投影。显示窗口仍为 ±300 km/s，三个探头的全部信号都在此窗口内。这里不再输出零速度切片。
 
 两个新增探头示例：[**(0,0,2) Rm**](probe_0_0_2/README.md)、[**(−1.5,0,1) Rm**](probe_m1p5_0_1/README.md)。它们使用同一套完整已保存轨迹，不重新采样或积分。
 
@@ -49,7 +49,7 @@ face_flux_m2_s = Q_i / A_face                             [m^-2 s^-1]
 
 内部位置、速度分别为 m、m/s，速度 bin 体积用 SI 单位；图轴才转为 km/s。驻留时间估计器不再除以总运行时间或粒子数。每步先求轨迹段与立方体交集，再按线性插值速度穿越 bin 的位置切分驻留时间。位置与速度使用同步端点。
 
-注意：本示例 `--dv-kms 1` 表示 bin **宽度**；包内 `forward_psd` 的 `vgrid` 表示每轴 bin **数量**，等效设置为 `vlim=(-500,500), vgrid=1000, velocity_unit=:km_s`。
+注意：本示例 `--dv-kms 5` 表示 bin **宽度**；包内 `forward_psd` 的 `vgrid` 表示每轴 bin **数量**，等效设置为 `vlim=(-500,500), vgrid=200, velocity_unit=:km_s`。
 
 ## 文件与复现
 
@@ -75,7 +75,7 @@ $py = 'C:\Users\Win\.conda\envs\mars\python.exe'
 $env:MC_GIT_COMMIT = git rev-parse HEAD
 $env:MC_GIT_STATUS = (git status --short) -join "`n"
 julia --startup-file=no --compiled-modules=existing --threads=12 --project=. "$example/monte_carlo_shell.jl" $run 1 500 0.1 100 reservoir_maxwellian_rate false
-& $py "$example/analyze_monte_carlo.py" $run --dv-kms 1 --vmax-kms 500 --plot-limit-kms 300 --output-dir "$run/analysis_1kms"
+& $py "$example/analyze_monte_carlo.py" $run --dv-kms 5 --vmax-kms 500 --plot-limit-kms 300 --output-dir "$run/analysis_5kms"
 & $py "$example/plot_trajectories.py" $run --output "$run/trajectories_5000.png" --count 5000 --seed 20260906
 ```
 
@@ -94,7 +94,7 @@ julia --startup-file=no --compiled-modules=existing --threads=12 --project=. "$e
 | [test_monte_carlo.jl](test_monte_carlo.jl) | 几何、采样归一化、解析传播测试 |
 | [test_monte_carlo_analysis.py](test_monte_carlo_analysis.py) | 速度 bin 穿越、密度单位及相关样本检查 |
 
-原始输出包含 `particles.csv`、`source_cells.csv`、`probe_residence.csv`、`probe_crossings.csv`、`metadata.toml`、`completion.toml` 和 `trajectories_*.jld2`。JLD2 各 `p<ID>/state` 在 Julia 中为 7×N，h5py 中为 N×7，列为 t,x,y,z,vx,vy,vz，单位 s、m、m/s。权重也保存在各组中。分析另存 `probe_psd_sparse.npz`、`analysis_summary.json` 和粒子贡献 CSV；稀疏文件保存零基 `indices_xyz`、对应 `f3d_s3_m6`、完整速度边界、1000³ 形状及两张二维投影。无需构造稠密 1000³ 数组。目录内的小型 NPZ 可用于读取已发布的 PSD，原始大型轨迹不上传。
+原始输出包含 `particles.csv`、`source_cells.csv`、`probe_residence.csv`、`probe_crossings.csv`、`metadata.toml`、`completion.toml` 和 `trajectories_*.jld2`。JLD2 各 `p<ID>/state` 在 Julia 中为 7×N，h5py 中为 N×7，列为 t,x,y,z,vx,vy,vz，单位 s、m、m/s。权重也保存在各组中。分析另存 `probe_psd_sparse.npz`、`analysis_summary.json` 和粒子贡献 CSV；稀疏文件保存零基 `indices_xyz`、对应 `f3d_s3_m6`、完整速度边界、200³ 形状及两张二维投影。无需构造稠密 200³ 数组。目录内的小型 NPZ 可用于读取已发布的 PSD，原始大型轨迹不上传。
 
 ```powershell
 julia --startup-file=no --compiled-modules=existing --project=. "$example/test_monte_carlo.jl"
@@ -138,4 +138,4 @@ foreach ($probeName in @('probe_1_0_2','probe_0_0_2','probe_m1p5_0_1')) {
 | (0,0,2) | 0.001002168 | 115 | 9.71 | 3,328 |
 | (−1.5,0,1) | 0.1177217 | 2,011 | 353.71 | 124,374 |
 
-三个探头均验证 `sum(f3d)*dv³ = sum(fxy)*dv² = sum(fxz)*dv² = sum(Q*tau)/V`，所有速度积分覆盖完整 ±500 km/s。不同图采用各自的对数色标，颜色不能直接跨图比较。特别是 (0,0,2) 的有效样本数较低，1 km/s 图上的细结构仍受 Monte Carlo 噪声影响。
+三个探头均验证 `sum(f3d)*dv³ = sum(fxy)*dv² = sum(fxz)*dv² = sum(Q*tau)/V`，所有速度积分覆盖完整 ±500 km/s。不同图采用各自的对数色标，颜色不能直接跨图比较。特别是 (0,0,2) 的有效样本数较低，5 km/s 图上的细结构仍受 Monte Carlo 噪声影响。

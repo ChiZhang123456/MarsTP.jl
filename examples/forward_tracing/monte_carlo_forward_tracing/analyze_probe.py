@@ -51,7 +51,7 @@ def sparse_psd(records, edges, volume):
                 effective_particles_per_nonzero_bin=neff, fxy_s2_m5=fxy, fxz_s2_m5=fxz), particle_total, current
 
 
-def analyze(folder, output, dv_kms=1., vmax_kms=500., plot_limit_kms=300.):
+def analyze(folder, output, dv_kms=5., vmax_kms=500., plot_limit_kms=300.):
     if dv_kms <= 0 or vmax_kms <= 0:
         raise ValueError('Positive grid width and extent required')
     bins = 2*vmax_kms/dv_kms
@@ -116,7 +116,7 @@ def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('run',type=Path)
     p.add_argument('--output-dir',type=Path,required=True)
-    p.add_argument('--dv-kms',type=float,default=1.)
+    p.add_argument('--dv-kms',type=float,default=5.)
     p.add_argument('--vmax-kms',type=float,default=500.)
     p.add_argument('--plot-limit-kms',type=float,default=300.)
     a=p.parse_args()
