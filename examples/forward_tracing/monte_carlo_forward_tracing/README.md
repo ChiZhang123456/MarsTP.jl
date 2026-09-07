@@ -208,14 +208,6 @@ Center (1,0,2) Rm:
 
 ![Probe at 1 0 2](probe_psd_projections.png)
 
-Center (0,0,2) Rm:
-
-![Probe at 0 0 2](probe_0_0_2/probe_psd_projections.png)
-
-Center (−1.5,0,1) Rm:
-
-![Probe at minus1.5 0 1](probe_m1p5_0_1/probe_psd_projections.png)
-
 Colors show velocity-integrated VDFs in s² m⁻⁵ with a turbo logarithmic scale.
 
 ### 3.5 Surface flux and residence density
