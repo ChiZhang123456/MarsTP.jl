@@ -1,4 +1,4 @@
-"""Reproduce the six bulk-speed flux maps from bundled data or fresh sampler CSV."""
+"""Reproduce the six bulk-speed flux maps from sampler CSV."""
 from pathlib import Path
 import argparse
 import numpy as np
@@ -12,27 +12,22 @@ HERE=Path(__file__).resolve().parent
 
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--csv',type=Path,help='CSV from sample_bulk_speed_flux_maps.jl')
+    parser.add_argument('--csv',type=Path,required=True,help='CSV from sample_bulk_speed_flux_maps.jl')
     parser.add_argument('--output',type=Path,default=HERE/'bulk_speed_flux_200_400_600km.png')
     args=parser.parse_args()
-    if args.csv:
-        a=np.genfromtxt(args.csv,delimiter=',',names=True,dtype=None,encoding='utf-8')
-        lon=np.unique(a['longitude_deg']);lat=np.unique(a['latitude_deg']);h=np.unique(a['altitude_km'])
-        assert list(h)==[200,400,600]
-        values=np.empty((3,2,len(lat),len(lon)))
-        for row,height in enumerate(h):
-            for col,species in enumerate(('O2+','O+')):
-                p=a[(a['altitude_km']==height)&(a['species']==species)]
-                assert len(p)==len(lat)*len(lon)
-                p=np.sort(p,order=['latitude_deg','longitude_deg'])
-                v=p['n_m3']*np.sqrt(p['ux_ms']**2+p['uy_ms']**2+p['uz_ms']**2)/1e4
-                assert np.isfinite(v).all() and (v>=0).all()
-                values[row,col]=v.reshape(len(lat),len(lon))
-        mask=np.broadcast_to((lat==-90)[None,None,:,None],values.shape)|(values<=0)
-    else:
-        with np.load(HERE/'bulk_speed_flux_maps.npz') as a:
-            lon=a['longitude_deg'];lat=a['latitude_deg'];h=a['altitude_km']
-            values=a['speed_flux_cm2_s'];mask=a['speed_mask']|(values<=0)
+    a=np.genfromtxt(args.csv,delimiter=',',names=True,dtype=None,encoding='utf-8')
+    lon=np.unique(a['longitude_deg']);lat=np.unique(a['latitude_deg']);h=np.unique(a['altitude_km'])
+    assert list(h)==[200,400,600]
+    values=np.empty((3,2,len(lat),len(lon)))
+    for row,height in enumerate(h):
+        for col,species in enumerate(('O2+','O+')):
+            p=a[(a['altitude_km']==height)&(a['species']==species)]
+            assert len(p)==len(lat)*len(lon)
+            p=np.sort(p,order=['latitude_deg','longitude_deg'])
+            v=p['n_m3']*np.sqrt(p['ux_ms']**2+p['uy_ms']**2+p['uz_ms']**2)/1e4
+            assert np.isfinite(v).all() and (v>=0).all()
+            values[row,col]=v.reshape(len(lat),len(lon))
+    mask=np.broadcast_to((lat==-90)[None,None,:,None],values.shape)|(values<=0)
     v=np.ma.array(values,mask=mask)
     assert np.isfinite(v.compressed()).all() and v.min()>0
     norm=LogNorm(float(v.min()),float(v.max()))

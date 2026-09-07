@@ -16,13 +16,7 @@ These maps preserve the existing `load_mhd_moments` reconstructed logarithmic ra
 
 ## Reproduction
 
-The bundled `bulk_speed_flux_maps.npz` contains the plotted SI-converted flux arrays, altitude and angular coordinates, and the display mask. Replot without the large VTK input, from the repository root:
-
-```powershell
-python examples/forward_tracing/monte_carlo_forward_tracing/plot_bulk_speed_flux_maps.py
-```
-
-To resample the local VTK file using the Julia project and write UTF-8 CSV without shell-dependent encoding:
+Regenerate the figure from the local VTK file using the Julia sampler and Python plotting script. Run from the repository root; the plotting script requires `--csv`. The following writes UTF-8 CSV without shell-dependent encoding:
 
 ```python
 import subprocess
