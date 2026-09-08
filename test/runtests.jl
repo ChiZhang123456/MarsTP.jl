@@ -1,6 +1,7 @@
 using MarsTP, StaticArrays, Test
 include("monte_carlo_weight.jl")
 include("forward_psd.jl")
+include("detector_omni_def.jl")
 include("trajectory_io.jl")
 
 @testset "Electric work: Cartesian frame and signed energy" begin

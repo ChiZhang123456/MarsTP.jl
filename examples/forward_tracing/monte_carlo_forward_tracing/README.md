@@ -228,6 +228,10 @@ This monoenergetic beam identity checks the detector estimator. For the prescrib
 
 > The detector PSD illustration is a historical result from before the bulk-speed source update and has not been recomputed with the new weights. The trajectory illustration in Section 2.2 has been replaced with 20,000 randomly selected O₂⁺ trajectories from the updated source model.
 
+### 3.6 Omnidirectional differential energy flux
+
+`detector_omni_def` computes the 4π direction-averaged DEF in eV/(m² s eV sr), without an isotropy assumption or angular binning. Both forward detector APIs accept `energy_edges_eV` and return `omni_def`; backward runs use `BacktraceConfig(energy_edges_eV=...)`. See [definitions, interfaces and examples](detector_omni_def.md).
+
 ## 4. Running and saving
 
 Run from the repository root using the Julia project environment. Sampling and tracing require `data/mars_fields_spherical_from_dat.vts`.

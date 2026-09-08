@@ -1,7 +1,7 @@
 """
     forward_psd(solutions; detector_m, side_m, vlim, vgrid, species="O2+",
                 rate_weights_s, option="3D", velocity_unit=:m_s,
-                coordinate_system="unspecified", storage=:dense)
+                coordinate_system="unspecified", storage=:dense, energy_edges_eV=nothing)
 
 Steady-source, finite-volume velocity PSD from saved forward trajectories.
 `solutions` accepts `trace_forward` output, a TestParticle ensemble, a vector of
@@ -36,11 +36,15 @@ normalization is performed. Failed solver return codes and invalid data error.
 No tracing, field loading, plotting, or file writing is performed.
 `storage=:sparse` optionally returns a Dict with one-based bin tuple keys.
 This function and `forward_psd_saved` share `ForwardPSDAccumulator`.
+With `energy_edges_eV`, `omni_def` additionally contains direction-averaged DEF
+[eV/(m^2 s eV sr)] from trajectory residence, independent of `vlim`/`vgrid`
+and `option`. Without energy edges it is `nothing`. Use `detector_omni_def`
+for a standalone energy spectrum without allocating velocity PSD bins.
 """
 function forward_psd(solutions; detector_m, side_m, vlim, vgrid,
         species="O2+", rate_weights_s, option="3D", velocity_unit=:m_s,
-        coordinate_system="unspecified", storage=:dense)
-    acc=ForwardPSDAccumulator(;detector_m,side_m,vlim,vgrid,species,velocity_unit,coordinate_system)
+        coordinate_system="unspecified", storage=:dense, energy_edges_eV=nothing)
+    acc=ForwardPSDAccumulator(;detector_m,side_m,vlim,vgrid,species,velocity_unit,coordinate_system,energy_edges_eV)
     trajectories=hasproperty(solutions,:t) ? (solutions,) :
         solutions isa AbstractVector ? solutions : solutions.u
     rate_weights_s isa AbstractVector || rate_weights_s isa Tuple ||

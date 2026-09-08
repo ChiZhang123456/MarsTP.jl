@@ -1,12 +1,15 @@
 """
     ForwardPSDAccumulator(; detector_m, side_m, vlim, vgrid, species="O2+",
-                          velocity_unit=:m_s, coordinate_system="unspecified")
+                          velocity_unit=:m_s, coordinate_system="unspecified",
+                          energy_edges_eV=nothing)
 
 Incremental, sparse 3D occupancy accumulator for `forward_psd`. Feed complete
 trajectories with `accumulate_forward_psd!`, then call `finish_forward_psd`.
 Uses exactly the same piecewise-linear saved-state estimator as `forward_psd`.
 Memory scales with occupied velocity bins and trajectory diagnostics, not all
 saved trajectory states. `vgrid` is bin count, not bin width.
+Optional `energy_edges_eV` accumulates an independent direction-averaged energy
+spectrum from residence segments, returned as `omni_def` by the finish call.
 """
 mutable struct ForwardPSDAccumulator
     detector_m::SVector{3,Float64}
@@ -22,10 +25,11 @@ mutable struct ForwardPSDAccumulator
     residence::Vector{Float64}
     outside::Vector{Float64}
     retcodes::Vector{String}
+    omni::Union{Nothing,_OmniDEFAccumulator}
 end
 
 function ForwardPSDAccumulator(;detector_m,side_m,vlim,vgrid,species="O2+",
-        velocity_unit=:m_s,coordinate_system="unspecified")
+        velocity_unit=:m_s,coordinate_system="unspecified",energy_edges_eV=nothing)
     haskey(TP.SpeciesDict,species) || throw(ArgumentError("Unknown species: $species"))
     length(detector_m)==3 && all(isfinite,detector_m) || throw(ArgumentError("Invalid detector center"))
     isfinite(side_m) && side_m>0 || throw(ArgumentError("side_m must be positive"))
@@ -40,7 +44,8 @@ function ForwardPSDAccumulator(;detector_m,side_m,vlim,vgrid,species="O2+",
     end
     ForwardPSDAccumulator(center,side,edges,String(species),String(coordinate_system),
         Dict{NTuple{3,Int},Float64}(),Dict{NTuple{3,Int},Float64}(),Dict{NTuple{3,Int},Int}(),
-        Int[],Float64[],Float64[],Float64[],String[])
+        Int[],Float64[],Float64[],Float64[],String[],
+        energy_edges_eV===nothing ? nothing : _OmniDEFAccumulator(energy_edges_eV,species))
 end
 
 # The single shared spatial clipping kernel: cube [lower,upper).
@@ -93,6 +98,9 @@ function accumulate_forward_psd!(acc::ForwardPSDAccumulator,wrapped;
         hit===nothing && continue
         lo,hi,entry,exit=hit
         residence+=dt*(hi-lo)
+        if acc.omni!==nothing
+            _def_segment!(acc.omni,v+lo*dv,v+hi*dv,dt*(hi-lo),rate/acc.side_m^3)
+        end
         if segment_observer!==nothing
             segment_observer((;particle_id=Int(particle_id),rate_weight_s=rate,
                 t0_s=ta+lo*dt,t1_s=ta+hi*dt,x0_m=x+lo*dx,x1_m=x+hi*dx,
@@ -165,7 +173,7 @@ function finish_forward_psd(acc::ForwardPSDAccumulator;option="3D",storage=:dens
     outside=sum(acc.rates.*acc.outside)/acc.side_m^3
     inside=sum(values(acc.occupancy);init=0.)/acc.side_m^3
     all(isfinite,(total,outside,inside)) || throw(ArgumentError("PSD accumulation overflow"))
-    return (;psd,axes=map(k->(:vx,:vy,:vz)[k],kept),storage,
+    return (;omni_def=acc.omni===nothing ? nothing : detector_omni_def(acc.omni),psd,axes=map(k->(:vx,:vy,:vz)[k],kept),storage,
         velocity_centers_m_s=map(k->(edges[k][1:end-1]+edges[k][2:end])/2,kept),
         velocity_edges_m_s=map(k->edges[k],kept),all_velocity_edges_m_s=edges,
         units=length(kept)==3 ? "s^3 m^-6" : "s^2 m^-5",density_in_range_m3=inside,

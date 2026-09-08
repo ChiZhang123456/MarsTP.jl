@@ -23,6 +23,7 @@ export O2plusSourceRates, load_o2plus_source_rates, assert_same_grid
 export IonosphereSource, load_ionosphere_source, ionosphere_properties, ionosphere_distribution
 export BacktraceConfig, run_backtrace_vdf, velocity_axes
 export ForwardTraceConfig, trace_forward
+export detector_omni_def
 export forward_psd, ForwardPSDAccumulator, accumulate_forward_psd!, finish_forward_psd
 export write_trajectory_batch, foreach_saved_trajectory, forward_psd_saved
 export MonteCarloWeight, thermal_speed_from_temperature_ev, maxwellian_importance_weight_3d
@@ -38,6 +39,7 @@ include("data/mhd.jl")
 include("data/atmosphere.jl")
 include("data/source_rates.jl")
 include("chemistry/reactions.jl")
+include("analysis/detector_omni_def.jl")
 include("tracing/detector_psd_backward.jl")
 include("tracing/forward_tracing.jl")
 include("tracing/monte_carlo_weight.jl")

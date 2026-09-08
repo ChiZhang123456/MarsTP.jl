@@ -126,15 +126,18 @@ end
 """
     forward_psd_saved(directory_or_files; detector_m, side_m, vlim, vgrid,
         species="O2+", option="3D", velocity_unit=:m_s,
-        coordinate_system="unspecified", storage=:dense, progress=nothing)
+        coordinate_system="unspecified", storage=:dense, progress=nothing,
+        energy_edges_eV=nothing)
 
 Streaming equivalent of forward_psd. Reads source rates directly from each
 saved trajectory and uses the same accumulator, cube clipping, interpolation,
 velocity-bin splitting, and SI normalization. No MHD input or tracing required.
+With `energy_edges_eV`, also returns `omni_def` from the same streamed residence
+segments, independent of the Cartesian velocity-bin limits.
 """
 function forward_psd_saved(source;detector_m,side_m,vlim,vgrid,species="O2+",
-        option="3D",velocity_unit=:m_s,coordinate_system="unspecified",storage=:dense,progress=nothing)
-    acc=ForwardPSDAccumulator(;detector_m,side_m,vlim,vgrid,species,velocity_unit,coordinate_system)
+        option="3D",velocity_unit=:m_s,coordinate_system="unspecified",storage=:dense,progress=nothing,energy_edges_eV=nothing)
+    acc=ForwardPSDAccumulator(;detector_m,side_m,vlim,vgrid,species,velocity_unit,coordinate_system,energy_edges_eV)
     foreach_saved_trajectory(source;species,progress) do record
         accumulate_forward_psd!(acc,record.trajectory;rate_weight_s=record.rate_weight_s,particle_id=record.particle_id)
         acc.retcodes[end]=record.termination_code

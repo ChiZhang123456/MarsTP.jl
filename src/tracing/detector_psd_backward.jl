@@ -17,6 +17,8 @@ Base.@kwdef struct BacktraceConfig
     solver::Symbol = :boris
     dt::Float64 = -0.2
     safety::Float64 = 0.005
+    # Optional 4pi-averaged DEF, accumulated before vy projection, eV edges.
+    energy_edges_eV::Union{Nothing,Vector{Float64}} = nothing
     include_work::Bool = false
     stream_vy::Bool = true
     checkpoint_file::String = project_path("output", "backtrace_checkpoint.jld2")
@@ -190,6 +192,7 @@ function _trace_sources(position, velocity, param, config, volume_source, ionosp
 end
 
 function _validate_backtrace(config)
+    config.energy_edges_eV===nothing || _OmniDEFAccumulator(config.energy_edges_eV,config.species)
     radius = _ionosphere_radius(config.ionosphere_altitude_km)
     all(isfinite, config.detector_Rm) && Rinner < norm(config.detector_Rm)*Rm < Router ||
         throw(ArgumentError("Detector must lie strictly above 200 km and below 4 Rm"))
@@ -233,6 +236,7 @@ function run_backtrace_vdf(config::BacktraceConfig = BacktraceConfig())
     mass = TP.SpeciesDict[config.species].m
     volume_source(p,v) = _volume_source(q_itp, gitm, mass, p,v)
     sheet_source(p,v) = ionosphere_distribution(ionosphere_source,p,v; mass)
+    omni_acc = config.energy_edges_eV===nothing ? nothing : _OmniDEFAccumulator(config.energy_edges_eV,config.species)
     f2d = zeros(Float64, nx, nz)
     f2d_volume = zeros(Float64, nx, nz)
     f2d_ionosphere = zeros(Float64, nx, nz)
@@ -276,6 +280,11 @@ function run_backtrace_vdf(config::BacktraceConfig = BacktraceConfig())
             config.progress_interval > 0 && n % config.progress_interval == 0 &&
                 println("backtrace progress: $n / $total")
         end
+        if omni_acc!==nothing
+            any(==(3),flags) && error("Cannot form DEF from failed backtrace velocities")
+            _def_vdf!(omni_acc,reshape(slice.+sheet_slice,nx,1,nz),
+                (axes.vx,[vy],axes.vz),(config.dv_kms*1e3,config.dvy_kms*1e3,config.dv_kms*1e3))
+        end
         f2d_volume .+= slice .* (config.dvy_kms * 1e3)
         f2d_ionosphere .+= sheet_slice .* (config.dvy_kms * 1e3)
         f2d .= f2d_volume .+ f2d_ionosphere
@@ -283,7 +292,7 @@ function run_backtrace_vdf(config::BacktraceConfig = BacktraceConfig())
             status_counts[flag + 1] += count(==(flag), flags)
         end
         if config.stream_vy
-            jldsave(config.checkpoint_file; work3d_eV, delta_kinetic3d_eV, status3d, psd3d, work_numerator, completed_iy = iy, f2d_xz = f2d, f2d_volume, f2d_ionosphere,
+            jldsave(config.checkpoint_file; omni_def=omni_acc===nothing ? nothing : detector_omni_def(omni_acc), work3d_eV, delta_kinetic3d_eV, status3d, psd3d, work_numerator, completed_iy = iy, f2d_xz = f2d, f2d_volume, f2d_ionosphere,
                 status_counts, status_labels, ionosphere_crossings, model, units, source_units, vx_km = axes.vx ./ 1e3, vy_km = axes.vy ./ 1e3,
                 vz_km = axes.vz ./ 1e3, config)
         end
@@ -291,7 +300,7 @@ function run_backtrace_vdf(config::BacktraceConfig = BacktraceConfig())
 
     mean_work2d_eV = config.include_work ? map((w,f) -> f > 0 ? w/f : NaN,
         work_numerator, repeat(reshape(f2d,nx,nz,1),1,1,3)) : nothing
-    result = (; work3d_eV, delta_kinetic3d_eV, status3d, psd3d, mean_work2d_eV,
+    result = (; omni_def=omni_acc===nothing ? nothing : detector_omni_def(omni_acc), work3d_eV, delta_kinetic3d_eV, status3d, psd3d, mean_work2d_eV,
         work_components=("total","convection","Hall"), work_units="eV",
         work_definition="Forward-time gain from backtrace endpoint to detector; 2D mean weighted by full-path PSD over vy, not birth-to-detector work",
         vx_km = axes.vx ./ 1e3, vy_km = axes.vy ./ 1e3,
