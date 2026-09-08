@@ -35,6 +35,6 @@ The Julia sampler also preserves radial velocity and radial flux diagnostics, bu
 
 With importance ratio `w_i = g(v_i)/g_s(v_i)`, the default shell source is `Q_i = F_cell A_cell w_i/sum_cell(w)`. Thus each cell's rates sum to `n*norm(U_bulk)*A_cell`, with no test of bulk or sampled radial velocity sign. The Maxwellian is untruncated. This is a prescribed injection model, not a signed radial or thermal half-space crossing flux. O⁺ in this figure is a comparison; the example still traces O₂⁺.
 
-The source sphere remains an absorbing boundary: inward launches retain their source rate but terminate at time zero as `inner`. Existing stored trajectory/PSD illustrations have not been rerun with this revised injection model. See the [main example](README.md) for the full weight definitions and reproduction commands.
+The source sphere remains an absorbing boundary: inward launches retain their source rate but terminate at time zero as `inner`. The trajectory illustration now shows 20,000 randomly selected O₂⁺ trajectories using the revised source model. The detector PSD illustration remains a historical result from before this update. See the [main example](README.md) for the full weight definitions and reproduction commands.
 
 Input SHA-256: `fa92bd82fe16975ad0d50f4e40ace344e9d41389d6024976d423e6126bc7a5c8`. The input is shared with the validated smoke run.

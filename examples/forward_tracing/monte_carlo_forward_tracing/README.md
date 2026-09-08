@@ -111,9 +111,9 @@ Each trajectory retains its Q_i during lossless propagation.
 
 ### 2.2 Trajectory illustration
 
-![5000 trajectories in XZ, XY and YZ](trajectories_5000.png)
+![20,000 randomly selected O2+ trajectories in XY, XZ and YZ](trajectories_5000.png)
 
-[plot_trajectories.py](plot_trajectories.py) shows 5000 paths projected onto XZ, XY and YZ.
+The figure shows 20,000 randomly selected O₂⁺ forward trajectories using the updated `n*norm(U_bulk)` source. Panels show XY, XZ and YZ projections, from left to right. Dashed and dotted curves mark the bow shock (BS) and magnetic pileup boundary (MPB); in the YZ panel these boundaries are cross-sections at X=0. Positions are normalized by the Mars radius, Rm=3390 km. The image retains the filename `trajectories_5000.png` for link compatibility; the displayed sample contains 20,000 trajectories.
 
 ## 3. Detector PSD and integrated VDF
 
@@ -226,7 +226,7 @@ $$
 
 This monoenergetic beam identity checks the detector estimator. For the prescribed broad-distribution source, individual rates scale with bulk speed and importance weight, so the source is not a thermal reservoir crossing model.
 
-> Existing trajectory and detector images below were generated before the bulk-speed source update. They remain historical examples and have not been recomputed with the new weights. Rerun tracing before using them as predictions of the new source model.
+> The detector PSD illustration is a historical result from before the bulk-speed source update and has not been recomputed with the new weights. The trajectory illustration in Section 2.2 has been replaced with 20,000 randomly selected O₂⁺ trajectories from the updated source model.
 
 ## 4. Running and saving
 
