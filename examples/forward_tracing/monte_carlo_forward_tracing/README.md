@@ -115,6 +115,12 @@ Each trajectory retains its Q_i during lossless propagation.
 
 The figure shows 20,000 randomly selected O₂⁺ forward trajectories using the updated `n*norm(U_bulk)` source. Panels show XY, XZ and YZ projections, from left to right. Dashed and dotted curves mark the bow shock (BS) and magnetic pileup boundary (MPB); in the YZ panel these boundaries are cross-sections at X=0. Positions are normalized by the Mars radius, Rm=3390 km. The image retains the filename `trajectories_5000.png` for link compatibility; the displayed sample contains 20,000 trajectories.
 
+### 2.3 Satellite orbit and particle distributions
+
+![O2+ trajectories, a circular orbit at 2.5 Rm and corresponding energy and reduced velocity distributions](satellite_orbit_distributions.png)
+
+The left panel combines 20,000 O₂⁺ trajectories with a prescribed circular satellite orbit in the Y=0 plane at a Mars-centered radius of **2.5 Rm**. The right panels show the corresponding direction-averaged DEF and one-dimensional reduced distributions in vx, vy and vz versus orbit angle. See [orbit geometry, distribution definitions and interpretation](satellite_orbit_distributions.md).
+
 ## 3. Detector PSD and integrated VDF
 
 ### 3.1 Particle rate times residence time
