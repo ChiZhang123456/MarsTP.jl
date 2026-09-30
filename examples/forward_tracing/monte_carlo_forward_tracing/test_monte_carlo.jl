@@ -7,7 +7,7 @@ const MC=ShellMonteCarlo
     fields=MHDFields([radius,Router],[0.,pi/2,pi],[0.,pi,2pi],zeros(3,2,3,3),zeros(3,2,3,3),:total,"")
     U=SA[-1000.,200.,300.]
     source=IonosphereSource(x->1e6,x->1000.,(x->U[1],x->U[2],x->U[3]),radius)
-    c=MC.Config(per_cell=1000)
+    c=MC.Config(per_cell=1000,flux_model="n_bulk_speed_maxwellian")
     @test c.flux_model=="n_bulk_speed_maxwellian"
     particles,cells=MC.release_particles(fields,source,c)
     @test sum(p.W for p in particles) ≈ 1e6*norm(U)*4pi*radius^2
@@ -48,7 +48,8 @@ end
     radius=Rm+500e3
     fields=MHDFields([radius,Router],[0.,pi/2,pi],[0.,pi,2pi],zeros(3,2,3,3),zeros(3,2,3,3),:total,"")
     source=IonosphereSource(x->1e6,x->1000.,(x->0.,x->0.,x->0.),radius)
-    c=MC.Config(per_cell=5000,flux_model="reservoir_maxwellian_rate")
+    c=MC.Config(per_cell=5000)
+    @test c.flux_model=="reservoir_maxwellian_rate"
     particles,cells=MC.release_particles(fields,source,c)
     @test length(particles)==20_000
     @test sum(a.area for a in cells)≈4pi*radius^2

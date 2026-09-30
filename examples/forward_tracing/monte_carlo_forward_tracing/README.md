@@ -10,9 +10,9 @@ Monte Carlo represents a continuous velocity distribution with a finite set of w
 
 ![Maxwellian and Monte Carlo particle weights](monte_carlo_sampling.png)
 
-The [plotting script](plot_monte_carlo_sampling.py) uses O₂⁺ at density 5 cm⁻³ (5×10⁶ m⁻³), bulk velocity (−10,0) km/s and physical temperature 10 eV. It draws 100,000 two-dimensional velocities with vz=0. The **sampling Maxwellian** has temperature 40 eV. A source area of **1 m²** and bulk speed **10 km/s** define the prescribed particle-rate weights. Both signs of each sampled velocity component are retained.
+The [plotting script](plot_monte_carlo_sampling.py) uses O₂⁺ at density 5 cm⁻³ (5×10⁶ m⁻³), bulk velocity (−10,0) km/s and physical temperature 10 eV. It draws 100,000 two-dimensional velocities with vz=0. The **sampling Maxwellian** has temperature 40 eV. A source area of **1 m²** and outward normal **(-1,0)** define the reservoir crossing-rate weights. Both signs of each sampled velocity component are retained.
 
-All three panels use turbo. The left panel shows the analytical two-dimensional Maxwellian (s² m⁻⁵). The middle and right panels color individual samples by `density_weight` (m⁻³) and `flux_weight` (s⁻¹), respectively. The rate weight is the density weight multiplied by area and bulk speed. There is no velocity-sign cutoff or shaded excluded half-plane.
+All three panels use turbo. The left panel shows the analytical two-dimensional Maxwellian (s² m⁻⁵). The middle and right panels color individual samples by `density_weight` (m⁻³) and `flux_weight` (s⁻¹), respectively. The density weights are self-normalized diagnostics. The crossing-rate weights use Q_i = n A max(-vx_i,0) w_i / N. Samples with vx >= 0 have zero crossing rate and appear gray. Both signs are retained in the sampled ensemble. Reconstruct the VDF with weighted velocity-bin sums, not scatter-point colors.
 
 ### 1.2 Maxwellian sampling and importance weights
 
@@ -45,39 +45,39 @@ The prefactor is c in the two-dimensional illustration and c^(3/2) in the three-
 
 The density-ratio principle also applies to a κ distribution: replace the physical and sampling probability densities by the intended normalized distributions, and evaluate their ratio at each sample. The sampling distribution must cover the support of the physical distribution. Efficient sampling of κ tails generally requires a suitable heavy-tailed sampling distribution. The current source function implements Maxwellian sampling; κ sampling requires an additional sampler and density evaluation. The Maxwellian exponential expression above does not apply unchanged to κ distributions.
 
-### 1.3 Density and particle-rate weights
+### 1.3 Density weights and outward crossing rates
 
-Let N be the dimensionless number of draws, n the number density in m⁻³, and w_i dimensionless importance weights. The density weight W_i^(n), in m⁻³, is:
+The diagnostic self-normalized density weights are
 
-$$
-W_i^{(n)}=n\frac{w_i}{\sum_{j=1}^{N}w_j},\qquad \sum_iW_i^{(n)}=n.
-$$
+$$W_i^{(n)}=n w_i/\sum_jw_j.$$
 
-`particle_density_weight` evaluates this expression.
+They sum exactly to n, but finite-sample moment estimates are biased. These diagnostic weights are not used to calculate reservoir injection rates.
 
-Let A be source area in m² and U the local MHD bulk velocity in m/s. The prescribed scalar source flux F is in m⁻² s⁻¹ and particle-rate weight Q_i is in s⁻¹:
+For a Maxwellian reservoir at a surface with outward unit normal er, define vr = v dot er. The physical outward crossing measure is n max(vr,0) g(v) d^3v dA. Consequently, for N untruncated draws from gs, the default rate estimator is
 
-$$
-F=n|\mathbf U|,\qquad
-Q_i=FA\frac{w_i}{\sum_jw_j}=A|\mathbf U|W_i^{(n)},\qquad
-\sum_iQ_i=n|\mathbf U|A.
-$$
+$$\boxed{Q_i=\frac{nA}{N}\max(\mathbf v_i\cdot\hat{\mathbf r},0)\frac{g(\mathbf v_i)}{g_s(\mathbf v_i)}}.$$
 
-`sample_maxwellian_source(...; area_m2=A, flux_model=:bulk_speed)` evaluates this model by default. No normal is required. Both inward and outward velocities receive weights from the full drifting Maxwellian. Neither the bulk radial velocity nor the sampled radial velocity is used as a sign filter or rate factor. The factor is the **bulk speed**, not the speed of each sampled particle. A zero bulk speed gives zero injected rate, even at finite temperature.
+Q_i is in s^-1. N includes every draw, including inward samples with zero rate. There is no normalization by sum(w), by the number of outward samples, or by flight duration. The sampled total rate fluctuates around the physical rate; it is not forced to equal an assigned total. `sample_maxwellian_source(...; normal=er, area_m2=A)` defaults to `flux_model=:reservoir`.
 
-This is a prescribed source injection model. It is not the signed flux through a sphere or the positive-half-space thermal crossing flux. The per-cell normalization fixes total injection exactly; self-normalized importance estimates of the velocity distribution have finite-sample bias, so convergence with particles per cell and effective sample size should be checked.
+For radial bulk drift Ur = U dot er and physical one-component thermal standard deviation sigma,
 
-For reproducibility of earlier runs, `flux_model=:reservoir` in the sampler retains the previous `n A max(v dot normal,0) w/N` estimator and requires a normal. The shell example selects it explicitly with `flux_model="reservoir_maxwellian_rate"`. The older conditional-outward model is also available only by explicit selection. Neither is the default.
+$$F_+=n[\sigma\varphi(U_r/\sigma)+U_r\Phi(U_r/\sigma)],$$
+
+where varphi and Phi are the standard normal density and cumulative distribution. At zero drift, F+ = n sigma / sqrt(2 pi), which is nonzero at finite temperature. Tangential bulk drift does not change this local crossing rate. Signed net flux n Ur is a different quantity.
+
+The explicit compatibility option `flux_model=:bulk_speed` assigns Q_i = n A norm(U) w_i / sum(w). It defines a prescribed injection source, rather than a Maxwellian boundary crossing distribution. It retains both velocity signs and gives zero rate at zero bulk speed. Applying an absorbing boundary to its inward launches does not recover the missing normal-speed factor. The shell option for this earlier model is `flux_model="n_bulk_speed_maxwellian"`. The older conditional-outward prescribed-rate model also remains an explicit option.
 
 ### 1.4 The 500 km ionospheric source
 
-MHD density, bulk velocity and temperature are read at each source cell at 500 km altitude. The source surface is also the absorbing inner boundary, with a radial outward normal. Let r_s be the source radius in m, θ colatitude in rad and ϕ longitude in rad. Cell area A_cell is in m²:
+MHD density, Cartesian bulk velocity and temperature are evaluated at the area-coordinate midpoint of each native angular cell at 500 km altitude. The source is also the absorbing inner boundary. With radius rs in m, colatitude theta and longitude phi in rad,
 
-$$
-A_{\rm cell}=r_s^2(\cos\theta_0-\cos\theta_1)(\phi_1-\phi_0).
-$$
+$$A_{cell}=r_s^2(\cos\theta_0-\cos\theta_1)(\phi_1-\phi_0).$$
 
-Each angular cell supplies 100 three-dimensional velocity samples. Weights use the local density, cell area and bulk-speed magnitude. The sampling Maxwellian temperature is four times the local physical temperature. No volume production is included outside the ionosphere. Inward launch velocities are retained with their positive source weights, but the unchanged absorbing boundary terminates them immediately at time zero with status `inner`. This is a transport boundary condition, not a sampling rejection. Escaping or detector-reaching rates therefore need not equal the prescribed injection rate.
+The default shell model is `reservoir_maxwellian_rate`. Each cell supplies 100 untruncated three-dimensional velocity draws at Ts=4T. Outward draws carry normal-speed rate weights; inward draws have zero rate and are saved with status `zero_rate` without propagation. No volume production is included outside the source.
+
+All draws within a cell launch from the same midpoint. This is spatial midpoint quadrature, not uniform random area sampling. Spatial refinement must be checked, especially for localized detector contributions. `cell_stride>1` skips cells without compensating their area and therefore describes only the sampled patches, not a full-shell rate estimate.
+
+At c=Ts/T=4, the asymptotic importance-weight ESS fraction is (2c-1)^(3/2)/c^3 = 0.289. Thus 100 draws give roughly 29 effective density samples per cell. This ESS does not measure uncertainty of crossing rates or detector occupancy. Compare independent seeds, particles per cell, sampling temperature and spatial resolution before interpreting rare trajectories.
 
 ### 1.5 Bulk-speed flux maps
 
@@ -113,13 +113,13 @@ Each trajectory retains its Q_i during lossless propagation.
 
 ![20,000 randomly selected O2+ trajectories in XY, XZ and YZ](trajectories_5000.png)
 
-The figure shows 20,000 randomly selected O₂⁺ forward trajectories using the updated `n*norm(U_bulk)` source. Panels show XY, XZ and YZ projections, from left to right. Dashed and dotted curves mark the bow shock (BS) and magnetic pileup boundary (MPB); in the YZ panel these boundaries are cross-sections at X=0. Positions are normalized by the Mars radius, Rm=3390 km. The image retains the filename `trajectories_5000.png` for link compatibility; the displayed sample contains 20,000 trajectories.
+This historical figure has not been recomputed with the reservoir default. It shows 20,000 randomly selected O₂⁺ forward trajectories using the updated `n*norm(U_bulk)` source. Panels show XY, XZ and YZ projections, from left to right. Dashed and dotted curves mark the bow shock (BS) and magnetic pileup boundary (MPB); in the YZ panel these boundaries are cross-sections at X=0. Positions are normalized by the Mars radius, Rm=3390 km. The image retains the filename `trajectories_5000.png` for link compatibility; the displayed sample contains 20,000 trajectories.
 
 ### 2.3 Satellite orbit and particle distributions
 
 ![O2+ trajectories, a circular orbit at 2.5 Rm and corresponding energy and reduced velocity distributions](satellite_orbit_distributions.png)
 
-The left panel combines 20,000 O₂⁺ trajectories with a prescribed circular satellite orbit in the Y=0 plane at a Mars-centered radius of **2.5 Rm**. The right panels show the corresponding direction-averaged DEF and one-dimensional reduced distributions in vx, vy and vz versus orbit angle. See [orbit geometry, distribution definitions and interpretation](satellite_orbit_distributions.md).
+This historical figure has not been recomputed with the reservoir default. The left panel combines 20,000 O₂⁺ trajectories with a prescribed circular satellite orbit in the Y=0 plane at a Mars-centered radius of **2.5 Rm**. The right panels show the corresponding direction-averaged DEF and one-dimensional reduced distributions in vx, vy and vz versus orbit angle. See [orbit geometry, distribution definitions and interpretation](satellite_orbit_distributions.md).
 
 ## 3. Detector PSD and integrated VDF
 
@@ -232,7 +232,7 @@ $$
 
 This monoenergetic beam identity checks the detector estimator. For the prescribed broad-distribution source, individual rates scale with bulk speed and importance weight, so the source is not a thermal reservoir crossing model.
 
-> The detector PSD illustration is a historical result from before the bulk-speed source update and has not been recomputed with the new weights. The trajectory illustration in Section 2.2 has been replaced with 20,000 randomly selected O₂⁺ trajectories from the updated source model.
+> The trajectory, satellite and detector PSD figures are historical results and have not been recomputed with the reservoir default. Only the sampling illustration reflects the corrected source weights.
 
 ### 3.6 Omnidirectional differential energy flux
 
@@ -246,7 +246,7 @@ Run from the repository root using the Julia project environment. Sampling and t
 include("examples/forward_tracing/monte_carlo_forward_tracing/monte_carlo_shell.jl")
 ShellMonteCarlo.run_monte_carlo("outputs/my_run",
     ShellMonteCarlo.Config(per_cell=100, dt=0.1, tmax=500., batch_size=1024,
-                          flux_model="n_bulk_speed_maxwellian", compress_trajectories=false))
+                          flux_model="reservoir_maxwellian_rate", compress_trajectories=false))
 ```
 
 [write_trajectory_batch](../../../src/tracing/trajectory_io.jl) saves batches of paths and weights. Position, velocity and time use m, m/s and s. `rate_weights_s` is in s⁻¹ and `source_density_weights_m3` in m⁻³:
@@ -286,7 +286,9 @@ Python requires NumPy, Matplotlib and h5py. Trajectory backgrounds use [src/visu
 | [analyze_saved_probes.jl](analyze_saved_probes.jl) | Detector PSD from saved paths |
 | [plot_library_psd.py](plot_library_psd.py) | Integrated two-dimensional VDFs |
 
-## Validation of the bulk-speed update
+## Historical validation of the bulk-speed update
+
+The following results refer to the earlier bulk-speed implementation, not the corrected reservoir default. See the reservoir validation below.
 
 Validated with Julia 1.12.6 and TestParticle 0.23.3. The package suite passed 420 assertions and the shell suite passed 240 assertions. Checks include exact patch-rate normalization, both radial velocity signs with positive weights, independence from normal direction, zero rate at zero bulk speed, the explicit legacy estimator, and immediate absorption of inward launches.
 
@@ -295,5 +297,11 @@ A local-field smoke run used 6 source cells, 10 particles per cell, dt=0.1 s and
 ```powershell
 julia --startup-file=no --compiled-modules=existing --project=. test/runtests.jl
 julia --startup-file=no --compiled-modules=existing --project=. examples/forward_tracing/monte_carlo_forward_tracing/test_monte_carlo.jl
-julia --startup-file=no --compiled-modules=existing --project=. examples/forward_tracing/monte_carlo_forward_tracing/monte_carlo_shell.jl outputs/new_bulk_speed_smoke 2000 0.2 0.1 10
+julia --startup-file=no --compiled-modules=existing --project=. examples/forward_tracing/monte_carlo_forward_tracing/monte_carlo_shell.jl outputs/new_bulk_speed_smoke 2000 0.2 0.1 10 n_bulk_speed_maxwellian
 ```
+
+## Reservoir validation
+
+The corrected package suite passed 520 assertions and the shell suite passed 241 assertions. The regenerated two-dimensional sampling illustration gives 5.06360096559e10 s^-1 versus the analytic 5.03640565439e10 s^-1 (0.54% difference), with the fixed seed and 100,000 draws.
+
+The source tests check zero-drift thermal flux, positive and negative radial drift, tangential-drift independence, and zero-field slab residence recovery of outward Maxwellian density and moments. The shell tests check the default selection, zero-rate inward draws, shell area and statistical rate convergence. No full ensemble or detector figures have been recomputed for this change.

@@ -16,7 +16,7 @@ Base.@kwdef struct Config
     # native cell edges, no duplicate longitude seam or duplicate pole areas
     cell_stride::Int = 1
     batch_size::Int = 256
-    flux_model::String = "n_bulk_speed_maxwellian"
+    flux_model::String = "reservoir_maxwellian_rate"
     sampling_temperature_factor::Float64 = 4.0
     compress_trajectories::Bool = false
 end
@@ -203,7 +203,7 @@ function release_particles(fields,source,c)
         (cellid-1)%c.cell_stride==0 || continue
         th0,th1=fields.theta[j:j+1];ph0,ph1=fields.phi[k:k+1]
         area=radius^2*(cos(th0)-cos(th1))*(ph1-ph0)
-        # One midpoint flux per native angular cell; uniform area samples within it.
+        # Local moments at the area-coordinate midpoint; rate modes launch at that midpoint.
         mu=(cos(th0)+cos(th1))/2;ph=(ph0+ph1)/2
         er=Vec(sqrt(1-mu^2)*cos(ph),sqrt(1-mu^2)*sin(ph),mu)
         m=ionosphere_properties(source,er)
@@ -211,7 +211,7 @@ function release_particles(fields,source,c)
             lon=rad2deg(ph),lat=asind(mu)))
         if c.flux_model in ("n_bulk_speed_maxwellian","reservoir_maxwellian_rate")
             # Follow maxwellian_source.jl: one midpoint patch, N UNTRUNCATED draws.
-            # Bulk-speed rates retain both velocity signs; reservoir is an explicit legacy mode.
+            # Bulk-speed rates retain both velocity signs; reservoir uses outward crossing rates.
             rng=Xoshiro(c.seed+cellid)
             sampled=sample_maxwellian_source(c.per_cell;position_m=radius*er,
                 bulk_velocity_m_s=m.Ui,temperature_ev=TP.kB*m.Ti/1.602176634e-19,
@@ -301,7 +301,7 @@ function run_monte_carlo(out,c=Config())
     rate_mode=c.flux_model in ("n_bulk_speed_maxwellian","reservoir_maxwellian_rate")
     if rate_mode
         meta["model"]="steady_reservoir_mc_v2"
-        meta["velocity_sampling"]="sample_maxwellian_source: untruncated Cartesian Maxwellian at Ts=4Ti; local midpoint patch"
+        meta["velocity_sampling"]="sample_maxwellian_source: untruncated Cartesian Maxwellian at Ts=sampling_temperature_factor*Ti; local midpoint patch"
         meta["position_sampling"]="area-centroid angular midpoint per native cell, as local patch approximation"
         meta["random_stream"]="Xoshiro(seed+cell_id), all N draws in original order"
         meta["weight_formula"]="Q_i = n A max(dot(v_i,er),0) (g_i/gs_i) / N_all_draws"
@@ -391,7 +391,7 @@ if abspath(PROGRAM_FILE)==@__FILE__
     tmax=length(ARGS)>2 ? parse(Float64,ARGS[3]) : 500.0
     dt=length(ARGS)>3 ? parse(Float64,ARGS[4]) : 0.1
     per_cell=length(ARGS)>4 ? parse(Int,ARGS[5]) : 100
-    flux_model=length(ARGS)>5 ? ARGS[6] : "n_bulk_speed_maxwellian"
+    flux_model=length(ARGS)>5 ? ARGS[6] : "reservoir_maxwellian_rate"
     compress_trajectories=length(ARGS)>6 ? parse(Bool,ARGS[7]) : false
     ShellMonteCarlo.main(out,ShellMonteCarlo.Config(;cell_stride=stride,tmax,dt,per_cell,flux_model,compress_trajectories,batch_size=1024))
 end

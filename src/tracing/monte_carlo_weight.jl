@@ -40,7 +40,7 @@ end
 """
     sample_maxwellian_source(N; position_m, bulk_velocity_m_s, temperature_ev,
         species="O2+", weights=MonteCarloWeight(), rng=Random.default_rng(),
-        normal=nothing, area_m2=nothing, flux_model=:bulk_speed)
+        normal=nothing, area_m2=nothing, flux_model=:reservoir)
 
 Sample N velocities from an untruncated drifting Maxwellian at Ts=factor*T.
 Return initial_states ([x,y,z,vx,vy,vz], m and m/s), dimensionless
@@ -48,20 +48,21 @@ importance_weights, density_weights_m3 (nothing for unitless mode), and
 macro_weights (density weights or unit_particle_weight*importance_weights).
 The Cartesian position and velocity must use the field coordinate frame.
 
-If area_m2 is supplied, the default flux_model=:bulk_speed returns
+If area_m2 is supplied, the default flux_model=:reservoir requires a normal
+and returns n*A*max(v dot normal,0)*importance_weight/N [s^-1].
+N includes all draws; inward samples have zero rate. Rates are not self-normalized.
+The explicit flux_model=:bulk_speed returns
 rate_weights_s = n*A*norm(U)*importance_weight/sum(importance_weights) [s^-1].
 This prescribed source injection uses the bulk speed, with no velocity-sign
 selection. Sum of patch rates is n*A*norm(U); zero bulk speed gives zero rate.
 Self-normalized importance weights have finite-sample bias for distribution
 estimates. normal is optional and does not affect bulk-speed rates.
-The explicit legacy flux_model=:reservoir requires a normal and returns
-n*A*max(v dot normal,0)*importance_weight/N instead.
 Each patch needs its own N and local moments.
 No propagation, collisions, escape classification, or files are produced here.
 """
 function sample_maxwellian_source(N::Integer; position_m, bulk_velocity_m_s,
         temperature_ev, species="O2+", weights=MonteCarloWeight(),
-        rng=Random.default_rng(), normal=nothing, area_m2=nothing, flux_model=:bulk_speed)
+        rng=Random.default_rng(), normal=nothing, area_m2=nothing, flux_model=:reservoir)
     N > 0 || throw(ArgumentError("N must be positive"))
     x,U = SVector{3,Float64}(position_m),SVector{3,Float64}(bulk_velocity_m_s)
     all(isfinite,x) && all(isfinite,U) || throw(ArgumentError("nonfinite state"))
