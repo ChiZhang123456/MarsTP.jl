@@ -52,7 +52,7 @@ end
     Phi(z)=0.5*ccall((:erfc,Base.Math.libm),Cdouble,(Cdouble,),-z/sqrt(2))
     for factor in (1.,4.), ur in (-sigma,0.,sigma), ut in (0.,3sigma)
         s=sample_maxwellian_source(N;position_m=(0.,0.,0.),
-            bulk_velocity_m_s=(ur,ut,0.),temperature_ev=1.,normal=(1.,0.,0.),area_m2=A,
+            bulk_velocity_m_s=(ur,ut,0.),temperature_ev=1.,normal=(1.,0.,0.),area_m2=A,flux_model=:reservoir,
             weights=MonteCarloWeight(source_number_density_m3=n,sampling_temperature_factor=factor),
             rng=MersenneTwister(20260929))
         expected=n*A*(sigma*phi(ur/sigma)+ur*Phi(ur/sigma))
@@ -71,4 +71,24 @@ end
     end
     @test_throws ArgumentError sample_maxwellian_source(10;position_m=(0.,0.,0.),
         bulk_velocity_m_s=(0.,0.,0.),temperature_ev=1.,area_m2=A)
+end
+@testset "Bidirectional crossing rates and slab density" begin
+    n,A,N=1e6,2e6,100000
+    sigma=thermal_speed_from_temperature_ev(1.)/sqrt(2)
+    for factor in (1.,4.)
+        args=(;position_m=(0.,0.,0.),bulk_velocity_m_s=(0.,0.,0.),temperature_ev=1.,
+            normal=(1.,0.,0.),area_m2=A,
+            weights=MonteCarloWeight(source_number_density_m3=n,sampling_temperature_factor=factor))
+        s=sample_maxwellian_source(N;args...,rng=MersenneTwister(20260930))
+        @test all(>(0),s.rate_weights_s)
+        @test any(v->v[4]<0,s.initial_states) && any(v->v[4]>0,s.initial_states)
+        @test isapprox(sum(s.rate_weights_s),2n*A*sigma/sqrt(2pi);rtol=.025)
+        recovered=sum(s.rate_weights_s[i]/(A*abs(s.initial_states[i][4])) for i in 1:N)
+        @test isapprox(recovered,n;rtol=.025)
+        reversed=sample_maxwellian_source(N;args...,normal=(-1.,0.,0.),rng=MersenneTwister(20260930))
+        @test s.rate_weights_s==reversed.rate_weights_s
+        outward=sample_maxwellian_source(N;args...,flux_model=:reservoir,rng=MersenneTwister(20260930))
+        inward=sample_maxwellian_source(N;args...,normal=(-1.,0.,0.),flux_model=:reservoir,rng=MersenneTwister(20260930))
+        @test s.rate_weights_s≈outward.rate_weights_s+inward.rate_weights_s
+    end
 end

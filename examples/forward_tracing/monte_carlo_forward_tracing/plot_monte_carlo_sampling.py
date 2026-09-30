@@ -28,17 +28,16 @@ def sample_demo(count=100_000, seed=20260907):
     # d=2: g2/gs2 = factor * exp[-d2/(2 sigma^2)*(1-1/factor)].
     importance = factor*np.exp(-d2/(2*sigma**2)*(1-1/factor))
     density_weight = n*importance/importance.sum()
-    # Outward normal is -x, aligned with the example bulk drift.
+    # Radial reference normal is -x; both crossing directions have weights.
     radial = -velocity[:,0]
-    rate_weight = n*area*np.maximum(radial,0)*importance/count
+    rate_weight = n*area*np.abs(radial)*importance/count
     ur = -bulk[0]
     outward_probability = .5*math.erfc(-ur/sigma/math.sqrt(2))
-    analytic_rate = n*area*(sigma/math.sqrt(2*math.pi)*math.exp(-.5*(ur/sigma)**2)+ur*outward_probability)
+    analytic_rate = n*area*(2*sigma/math.sqrt(2*math.pi)*math.exp(-.5*(ur/sigma)**2)+ur*(2*outward_probability-1))
     neff = importance.sum()**2/np.sum(importance**2)
     weighted_mean = np.sum(density_weight[:,None]*velocity,axis=0)/n
     assert np.isclose(density_weight.sum(),n,rtol=1e-14)
-    assert np.all(rate_weight[radial<=0]==0)
-    assert np.all(rate_weight[radial>0]>0)
+    assert np.all(rate_weight[radial!=0]>0)
     assert np.any(velocity[:,0]<0) and np.any(velocity[:,0]>0)
     assert np.all(abs(weighted_mean-bulk)<6*sigma/math.sqrt(neff))
     assert np.isclose(rate_weight.sum(),analytic_rate,rtol=.03)
@@ -82,7 +81,7 @@ def main():
         ax.set(xlim=np.array(xlim)/1000,ylim=np.array(ylim)/1000,
                xlabel=r'$v_x$ (km/s)',ylabel=r'$v_y$ (km/s)',aspect='equal')
     fig.suptitle('O$_2^+$: $n$ = 5 cm$^{-3}$, $U_x$ = -10 km/s, $T$ = 10 eV, $v_z$ = 0\n'
-                 f'{args.count:,} Maxwellian samples; '+r'$T_s=4T$; source area = 1 m$^2$, outward normal = -x, $Q_i=nA(v_r)_+w_i/N$')
+                 f'{args.count:,} Maxwellian samples; '+r'$T_s=4T$; source area = 1 m$^2$, outward normal = -x, $Q_i=nA|v_r|w_i/N$')
     args.output.parent.mkdir(parents=True,exist_ok=True)
     fig.savefig(args.output,dpi=220,bbox_inches='tight')
     plt.close(fig)

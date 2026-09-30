@@ -8,7 +8,8 @@ const Row = SVector{7,Float64}
 Base.@kwdef struct Config
     dt::Float64 = 0.1
     tmax::Float64 = 500.0
-    altitude_km::Float64 = 500.0
+    altitude_km::Float64 = 500.0 # source altitude, kept for API compatibility
+    absorption_altitude_km::Float64 = 200.0
     per_cell::Int = 100
     seed::Int = 20260906
     detector::Vec = Vec(1,0,2)*Rm
@@ -16,7 +17,7 @@ Base.@kwdef struct Config
     # native cell edges, no duplicate longitude seam or duplicate pole areas
     cell_stride::Int = 1
     batch_size::Int = 256
-    flux_model::String = "reservoir_maxwellian_rate"
+    flux_model::String = "bidirectional_maxwellian_rate"
     sampling_temperature_factor::Float64 = 4.0
     compress_trajectories::Bool = false
 end
@@ -93,7 +94,7 @@ end
 
 function trace_particle(x0,v0,param,c::Config; keep_history=true)
     qm=param[1]; charge=TP.SpeciesDict["O2+"].q; mass=TP.SpeciesDict["O2+"].m
-    inner=Rm+c.altitude_km*1e3
+    inner=Rm+c.absorption_altitude_km*1e3
     lo,hi=c.detector.-c.side/2,c.detector.+c.side/2
     x,v,t=x0,v0,0.0
     E,B=Vec(param[3](x,t)),Vec(param[4](x,t))
@@ -150,6 +151,8 @@ function trace_particle(x0,v0,param,c::Config; keep_history=true)
     return (;history,residence,events,status,time=t,x,v,work,dK,residual=dK-work,maxgyro)
 end
 
+source_radius(c)=Rm+c.altitude_km*1e3
+
 function validate_geometry(path,fields,c)
     vtk=VTKFile(path)
     dims=ReadVTK.get_wholeextent(vtk.xml_file)[1]
@@ -170,6 +173,8 @@ function validate_geometry(path,fields,c)
     # The file lower radius is 1.058892815 Rm, slightly different from Rinner/Rm.
     r=[norm(Vec(pts[:,i,1,1]))*scales[q] for i in 1:dims[1]]
     all(diff(r).>0) || error("Nonmonotonic radial mesh")
+    inner=Rm+c.absorption_altitude_km*1e3
+    r[1]<=inner<source_radius(c)<=r[end] || error("Source or absorbing boundary outside field radial domain; no extrapolation allowed")
     mesherr=0.0
     for i in 1:dims[1],j in 1:dims[2],k in 1:dims[3]
         th,ph=fields.theta[j],fields.phi[k]
@@ -192,7 +197,7 @@ function validate_geometry(path,fields,c)
 end
 
 function release_particles(fields,source,c)
-    c.flux_model in ("n_bulk_speed_maxwellian","n_speed_outward_maxwellian","reservoir_maxwellian_rate") || error("Unsupported flux model")
+    c.flux_model in ("n_bulk_speed_maxwellian","n_speed_outward_maxwellian","reservoir_maxwellian_rate","bidirectional_maxwellian_rate") || error("Unsupported flux model")
     radius=source.radius
     particles=NamedTuple[]
     cells=NamedTuple[]
@@ -209,16 +214,17 @@ function release_particles(fields,source,c)
         m=ionosphere_properties(source,er)
         push!(cells,(;cellid,j,k,area,flux=m.flux,n=m.n,T=m.Ti,U=m.Ui,
             lon=rad2deg(ph),lat=asind(mu)))
-        if c.flux_model in ("n_bulk_speed_maxwellian","reservoir_maxwellian_rate")
+        if c.flux_model in ("n_bulk_speed_maxwellian","reservoir_maxwellian_rate","bidirectional_maxwellian_rate")
             # Follow maxwellian_source.jl: one midpoint patch, N UNTRUNCATED draws.
-            # Bulk-speed rates retain both velocity signs; reservoir uses outward crossing rates.
+            # Bidirectional rates retain both crossing directions; reservoir selects outward crossing.
             rng=Xoshiro(c.seed+cellid)
             sampled=sample_maxwellian_source(c.per_cell;position_m=radius*er,
                 bulk_velocity_m_s=m.Ui,temperature_ev=TP.kB*m.Ti/1.602176634e-19,
                 weights=MonteCarloWeight(source_number_density_m3=m.n,
                     sampling_temperature_factor=c.sampling_temperature_factor),
                 normal=er,area_m2=area,rng,
-                flux_model=c.flux_model=="n_bulk_speed_maxwellian" ? :bulk_speed : :reservoir)
+                flux_model=c.flux_model=="n_bulk_speed_maxwellian" ? :bulk_speed :
+                    c.flux_model=="bidirectional_maxwellian_rate" ? :bidirectional : :reservoir)
             for q in 1:c.per_cell
                 state=sampled.initial_states[q]
                 x=Vec(state[1:3]);v=Vec(state[4:6])
@@ -258,12 +264,13 @@ function run_monte_carlo(out,c=Config())
     c.dt>0 && c.tmax>0 && c.per_cell>0 && c.cell_stride>0 || error("Invalid configuration")
     isapprox(c.tmax/c.dt,round(c.tmax/c.dt);atol=1e-8) || error("tmax must be a multiple of dt")
     ispath(out) && error("Output exists; choose a new run directory: $out")
+    0<=c.absorption_altitude_km<c.altitude_km || error("Require 0 <= absorption altitude < source altitude")
     mkpath(out)
     fields=load_mhd_fields()
     fields,source,geometry=validate_geometry(fields.path,fields,c)
     param=MarsTP.mhd_param(fields;species="O2+")
     particles,cells=release_particles(fields,source,c)
-    if c.flux_model!="n_bulk_speed_maxwellian"
+    if c.flux_model in ("reservoir_maxwellian_rate","n_speed_outward_maxwellian")
         all(p->p.W==0 || dot(p.v,p.x)>0,particles) || error("Positive-rate non-outward release")
     end
     totalrate=sum(p.W for p in particles)
@@ -271,7 +278,7 @@ function run_monte_carlo(out,c=Config())
     c.cell_stride==1 && !isapprox(area,4pi*source.radius^2;rtol=1e-12) && error("Shell area mismatch")
     meta=Dict("model"=>"steady_shell_mc_v1","species"=>"O2+","Rm_m"=>Rm,
         "particle_mass_kg"=>TP.SpeciesDict["O2+"].m,"particle_charge_C"=>TP.SpeciesDict["O2+"].q,
-        "inner_altitude_km"=>c.altitude_km,"source_altitude_km"=>c.altitude_km,
+        "inner_altitude_km"=>c.absorption_altitude_km,"source_altitude_km"=>c.altitude_km,
         "outer_radius_Rm"=>Router/Rm,"detector_Rm"=>collect(c.detector/Rm),
         "cube_side_Rm"=>c.side/Rm,"cube_volume_m3"=>c.side^3,"cube_face_area_m2"=>c.side^2,
         "dt_s"=>c.dt,"max_flight_time_s"=>c.tmax,"per_cell"=>c.per_cell,"seed"=>c.seed,
@@ -298,7 +305,7 @@ function run_monte_carlo(out,c=Config())
     meta["detector_interpolation"]="piecewise linear saved endpoints, shared with forward_psd"
     meta["compress_trajectories"]=c.compress_trajectories
     meta["n_positive_rate_particles"]=count(p->p.W>0,particles)
-    rate_mode=c.flux_model in ("n_bulk_speed_maxwellian","reservoir_maxwellian_rate")
+    rate_mode=c.flux_model in ("n_bulk_speed_maxwellian","reservoir_maxwellian_rate","bidirectional_maxwellian_rate")
     if rate_mode
         meta["model"]="steady_reservoir_mc_v2"
         meta["velocity_sampling"]="sample_maxwellian_source: untruncated Cartesian Maxwellian at Ts=sampling_temperature_factor*Ti; local midpoint patch"
@@ -310,13 +317,20 @@ function run_monte_carlo(out,c=Config())
         meta["sampling_caveat"]="No rate self-normalization; inward samples have Q=0 and are retained without propagation"
         meta["source_flux_column_note"]="source_flux_m2_s is n*norm(U) diagnostic only; rate weights use individual outward radial speed"
     end
+    if c.flux_model=="bidirectional_maxwellian_rate"
+        meta["model"]="steady_bidirectional_shell_mc_v4"
+        meta["source_flux_column_note"]="source_flux_m2_s is n*norm(U) diagnostic only; rate weights use absolute individual radial speed"
+        meta["weight_formula"]="Q_i = n A abs(dot(v_i,er)) (g_i/gs_i) / N_all_draws"
+        meta["sampling_caveat"]="Both launch directions carry crossing rates; no self-normalization; source crossings during propagation do not create new particles"
+        meta["inner_boundary_note"]="Source at altitude_km; absorption only at absorption_altitude_km; crossing the source again does not terminate transport"
+    end
     if c.flux_model=="n_bulk_speed_maxwellian"
         meta["model"]="steady_bulk_speed_mc_v3"
         meta["velocity_sampling"]="untruncated Cartesian Maxwellian at Ts=sampling_temperature_factor*Ti; no radial-sign selection"
         meta["weight_formula"]="Q_i = n norm(U_bulk) A w_i / sum_cell(w), w=g/gs"
         meta["sampling_caveat"]="Self-normalized importance estimates have finite-sample bias; patch rates sum exactly to n norm(U_bulk) A"
         meta["source_flux_column_note"]="source_flux_m2_s = n norm(U_bulk), prescribed injection flux, not net radial surface flux"
-        meta["inner_boundary_note"]="inward launch velocities retain source rate and are immediately absorbed at the source/inner boundary"
+        meta["inner_boundary_note"]="inward launch velocities retain source rate and propagate below the source until the lower absorbing boundary"
     end
     open(joinpath(out,"metadata.toml"),"w") do io; TOML.print(io,meta);end
     cp(MarsTP.project_path("Project.toml"),joinpath(out,"Project.snapshot.toml"))
@@ -391,7 +405,7 @@ if abspath(PROGRAM_FILE)==@__FILE__
     tmax=length(ARGS)>2 ? parse(Float64,ARGS[3]) : 500.0
     dt=length(ARGS)>3 ? parse(Float64,ARGS[4]) : 0.1
     per_cell=length(ARGS)>4 ? parse(Int,ARGS[5]) : 100
-    flux_model=length(ARGS)>5 ? ARGS[6] : "reservoir_maxwellian_rate"
+    flux_model=length(ARGS)>5 ? ARGS[6] : "bidirectional_maxwellian_rate"
     compress_trajectories=length(ARGS)>6 ? parse(Bool,ARGS[7]) : false
     ShellMonteCarlo.main(out,ShellMonteCarlo.Config(;cell_stride=stride,tmax,dt,per_cell,flux_model,compress_trajectories,batch_size=1024))
 end

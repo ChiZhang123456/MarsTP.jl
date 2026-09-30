@@ -3,7 +3,7 @@
 Ported from [MarsASPEN.jl](https://github.com/ChiZhang123456/MarsASPEN.jl/blob/main/src/monte_carlo_weight.jl), blob `41d84d67602c5fa284f172a540cccc46531ca8e0`.
 The original file supplies weights, not random draws or a transport solver.
 MarsTP adds `sample_maxwellian_source`; default particle mass is O2+, not H.
-The tracked shell example defaults to Maxwellian outward crossing rates.
+The tracked shell example defaults to bidirectional Maxwellian crossing rates at 500 km, with absorption at 200 km.
 
 For physical temperature T, sampling Maxwellian temperature Ts=c*T and bulk velocity U,
 each Cartesian velocity component is sampled as U_k+sqrt(e*Ts/m)*randn().
@@ -36,13 +36,15 @@ For an explicitly specified patch area A, the explicit compatibility option `flu
 
 No velocity-sign selection is applied. Both signs of sampled velocity and bulk radial velocity are allowed. The speed factor is the local bulk speed, not the speed of each sample. Total patch injection is exactly `n*norm(U_bulk)*A`. Zero density or zero bulk speed yields zero rates. A normal is optional and does not affect these rates.
 
-This is a prescribed source injection model with full Maxwellian velocity support. It is not a net radial or thermal half-space crossing flux. The same scalar flux definition is used by the backtrace thin-sheet source, although the boundary handling and numerical estimators must still be considered separately. When this explicit bulk-speed option is selected in the shell example, the 500 km source remains the absorbing boundary: inward launches retain their rate and terminate immediately with status `inner`. The default reservoir model instead assigns zero rates to inward samples and saves them as `zero_rate`.
+This is a prescribed source injection model with full Maxwellian velocity support. It is not a net radial or thermal half-space crossing flux. The same scalar flux definition is used by the backtrace thin-sheet source, although the boundary handling and numerical estimators must still be considered separately. When this explicit bulk-speed option is selected in the shell example, inward launches retain their rate and continue below the 500 km source, until absorption at 200 km or another termination condition. The source and absorbing boundary are separate.
 
-The default option `flux_model=:reservoir` requires an outward normal er and retains
+The explicit outward-only option `flux_model=:reservoir` requires an outward normal er and retains
 
     rate_weights_s[i] = n*A*max(dot(v_i,er),0)*w_i/N          [s^-1]
 
 In the reservoir model N includes all draws, inward samples have zero rate, and no rate self-normalization is applied. At zero bulk drift its analytic total is `n*A*sqrt(e*T/m)/sqrt(2*pi)`. No self-normalization is applied to crossing rates.
+
+The default `flux_model=:bidirectional` uses n*A*abs(dot(v_i,er))*w_i/N. Both directions carry crossing-rate magnitudes. A particle returning across the source retains its original rate and is not reinjected. The total estimates outward plus inward crossing rates, not signed net flux.
 
 See `maxwellian_source.jl` for the local MHD moment adapter and [the shell example](monte_carlo_forward_tracing/README.md). Each patch needs its own area, local moments and reproducible random stream.
 
@@ -58,7 +60,7 @@ it diagnoses velocity importance sampling, not uncertainty of escape flux.
 
 Validation: `julia --compiled-modules=existing --project=. test/runtests.jl`.
 Tests cover SI thermal speed, fixed-seed reproducibility, normalization,
-invalid inputs, weighted second moments, bulk-speed rate normalization, independence from normal direction, both sampled velocity signs, zero-bulk rates, and the default reservoir analytic flux. No large trajectory simulation
+invalid inputs, weighted second moments, bulk-speed rate normalization, independence from normal direction, both sampled velocity signs, zero-bulk rates, outward-only and bidirectional analytic fluxes, and slab density recovery. No large trajectory simulation
 is part of these tests. No new external dependency is needed; Random is a
 Julia standard library.
 
