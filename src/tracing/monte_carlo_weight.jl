@@ -40,7 +40,7 @@ end
 """
     sample_maxwellian_source(N; position_m, bulk_velocity_m_s, temperature_ev,
         species="O2+", weights=MonteCarloWeight(), rng=Random.default_rng(),
-        normal=nothing, area_m2=nothing, flux_model=:bidirectional)
+        normal=nothing, area_m2=nothing, flux_model=:bulk_speed)
 
 Sample N velocities from an untruncated drifting Maxwellian at Ts=factor*T.
 Return initial_states ([x,y,z,vx,vy,vz], m and m/s), dimensionless
@@ -48,23 +48,20 @@ importance_weights, density_weights_m3 (nothing for unitless mode), and
 macro_weights (density weights or unit_particle_weight*importance_weights).
 The Cartesian position and velocity must use the field coordinate frame.
 
-If area_m2 is supplied, default flux_model=:bidirectional requires a normal
-and returns n*A*abs(v dot normal)*importance_weight/N [s^-1].
-Both inward and outward draws have crossing rates; N includes all draws.
-The explicit :reservoir option uses max(v dot normal,0) for an outward-only source.
-Neither crossing estimator self-normalizes rates.
-The explicit flux_model=:bulk_speed returns
+If area_m2 is supplied, the default flux_model=:bulk_speed returns
 rate_weights_s = n*A*norm(U)*importance_weight/sum(importance_weights) [s^-1].
 This prescribed source injection uses the bulk speed, with no velocity-sign
 selection. Sum of patch rates is n*A*norm(U); zero bulk speed gives zero rate.
 Self-normalized importance weights have finite-sample bias for distribution
 estimates. normal is optional and does not affect bulk-speed rates.
+The explicit legacy flux_model=:reservoir requires a normal and returns
+n*A*max(v dot normal,0)*importance_weight/N instead.
 Each patch needs its own N and local moments.
 No propagation, collisions, escape classification, or files are produced here.
 """
 function sample_maxwellian_source(N::Integer; position_m, bulk_velocity_m_s,
         temperature_ev, species="O2+", weights=MonteCarloWeight(),
-        rng=Random.default_rng(), normal=nothing, area_m2=nothing, flux_model=:bidirectional)
+        rng=Random.default_rng(), normal=nothing, area_m2=nothing, flux_model=:bulk_speed)
     N > 0 || throw(ArgumentError("N must be positive"))
     x,U = SVector{3,Float64}(position_m),SVector{3,Float64}(bulk_velocity_m_s)
     all(isfinite,x) && all(isfinite,U) || throw(ArgumentError("nonfinite state"))
@@ -74,11 +71,11 @@ function sample_maxwellian_source(N::Integer; position_m, bulk_velocity_m_s,
     mass = TP.SpeciesDict[species].m
     sigma = thermal_speed_from_temperature_ev(temperature_ev*c,mass)/sqrt(2)
     thermal_speed_from_temperature_ev(temperature_ev,mass)
-    flux_model in (:bulk_speed,:reservoir,:bidirectional) || throw(ArgumentError("unknown flux_model"))
+    flux_model in (:bulk_speed,:reservoir) || throw(ArgumentError("unknown flux_model"))
     normal !== nothing && area_m2 === nothing && throw(ArgumentError("normal requires area_m2"))
     area_m2 === nothing || _mc_positive(area_m2) || throw(ArgumentError("positive finite area required"))
-    flux_model in (:reservoir,:bidirectional) && area_m2!==nothing && normal===nothing &&
-        throw(ArgumentError("crossing rate requires normal"))
+    flux_model==:reservoir && area_m2!==nothing && normal===nothing &&
+        throw(ArgumentError("reservoir rate requires normal"))
     er = if normal === nothing
         nothing
     else
@@ -94,10 +91,8 @@ function sample_maxwellian_source(N::Integer; position_m, bulk_velocity_m_s,
         v = U + sigma*SVector{3,Float64}(randn(rng,3))
         states[i] = SVector{6,Float64}(x...,v...)
         w[i] = maxwellian_importance_weight_3d(U,v,temperature_ev,temperature_ev*c; mass_kg=mass)
-        if rates !== nothing && flux_model in (:reservoir,:bidirectional)
-            vr = dot(v,er)
-            crossing_speed = flux_model==:bidirectional ? abs(vr) : max(vr,0)
-            rates[i] = n*area_m2*crossing_speed*w[i]/N
+        if rates !== nothing && flux_model==:reservoir
+            rates[i] = n*area_m2*max(dot(v,er),0)*w[i]/N
         end
     end
     total = sum(w)

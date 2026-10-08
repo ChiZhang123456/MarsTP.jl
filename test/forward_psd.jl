@@ -71,7 +71,7 @@ end
     errors = Float64[]
     for dt in (.2,.1,.05)
         sol = TP.solve(prob,TP.Boris();dt)
-        traj = only(sol.u)
+        traj = sol
         @test all(isapprox(u[4],t;atol=1e-12) for (u,t) in zip(traj.u,traj.t))
         p = forward_psd([sol];kw...)
         @test p.psd == forward_psd(sol;kw...).psd
@@ -80,6 +80,6 @@ end
     end
     @test errors[3] < errors[2] < errors[1]
     sol = TP.solve(prob,TP.AdaptiveBoris(;safety=.001))
-    @test all(isapprox(u[4],t;atol=1e-10) for (u,t) in zip(only(sol.u).u,only(sol.u).t))
+    @test all(isapprox(u[4],t;atol=1e-10) for (u,t) in zip(sol.u,sol.t))
     @test forward_psd(sol;kw...).density_total_m3 ≈ sqrt(2) rtol=1e-3
 end

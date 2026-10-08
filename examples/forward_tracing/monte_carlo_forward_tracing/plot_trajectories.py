@@ -73,7 +73,7 @@ def main():
             print(f'Read {batch_index} batches, {len(found)} selected paths', flush=True)
     assert len(found) == args.count and len(set(found)) == args.count
     mpl.rcParams.update({'font.family': 'Arial', 'font.size': 11})
-    colors = dict(zip(('inner', 'outer', 'time_limit'), plt.get_cmap('turbo')([.13, .53, .88])))
+    colors = {'inner': '#4477AA', 'outer': '#EE9944', 'time_limit': '#228877'}
     assert set(statuses) <= colors.keys(), set(statuses)
     fig, axes = plt.subplots(1, 3, figsize=(15, 5.3), layout='constrained')
     center = meta['detector_Rm']
@@ -87,7 +87,7 @@ def main():
                    boundary_color='black', boundary_ls='--', boundary_lw=1, mars_lw=0, mars_ls='-')
             bs_mpb(ax=ax, draw_bs=False, draw_mpb=True, sphere=False,
                    boundary_color='black', boundary_ls=':', boundary_lw=1, mars_lw=0, mars_ls='-')
-        plot_mars(ax=ax, texture=True, facecolor='#b9a296', edgecolor='black', lw=.7, zorder=5)
+        plot_mars(ax=ax, texture=True, radius=1.0, zorder=5)
         ax.add_patch(Circle((0,0), 1+meta['source_altitude_km']*1000/meta['Rm_m'],
                             fill=False, ec='gray', lw=.8, zorder=6))
         ax.add_patch(Rectangle((center[i]-side/2,center[j]-side/2),side,side,
@@ -96,9 +96,7 @@ def main():
                xlabel=f'{"XYZ"[i]} ($R_M$)', ylabel=f'{"XYZ"[j]} ($R_M$)')
         ax.set_title(name, loc='left')
     handles = [Line2D([],[],color=c,lw=2,label=s) for s,c in colors.items()]
-    handles += [Line2D([],[],color='k',ls='--',label='BS'),
-                Line2D([],[],color='k',ls=':',label='MPB'),
-                Line2D([],[],color='magenta',label='Probe')]
+    handles += [Line2D([],[],color='magenta',label='Probe')]
     axes[1].legend(handles=handles, loc='lower left', fontsize=8, ncol=2,
                    frameon=True, facecolor='white', framealpha=1, edgecolor='none')
     fig.suptitle(f'O$_2^+$: {args.count:,} sampled trajectories, $R_M$ = {meta["Rm_m"]/1000:g} km')

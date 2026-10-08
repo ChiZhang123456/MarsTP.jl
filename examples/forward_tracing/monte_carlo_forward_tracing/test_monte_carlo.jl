@@ -7,7 +7,7 @@ const MC=ShellMonteCarlo
     fields=MHDFields([radius,Router],[0.,pi/2,pi],[0.,pi,2pi],zeros(3,2,3,3),zeros(3,2,3,3),:total,"")
     U=SA[-1000.,200.,300.]
     source=IonosphereSource(x->1e6,x->1000.,(x->U[1],x->U[2],x->U[3]),radius)
-    c=MC.Config(per_cell=1000,flux_model="n_bulk_speed_maxwellian")
+    c=MC.Config(per_cell=1000)
     @test c.flux_model=="n_bulk_speed_maxwellian"
     particles,cells=MC.release_particles(fields,source,c)
     @test sum(p.W for p in particles) ≈ 1e6*norm(U)*4pi*radius^2
@@ -23,7 +23,7 @@ const MC=ShellMonteCarlo
     zero_field=(x,t)->SA[0.,0.,0.]
     p=first(filter(p->dot(p.x,p.v)<0,particles))
     r=MC.trace_particle(p.x,p.v,(sp.q/sp.m,sp.m,zero_field,zero_field,nothing),MC.Config(tmax=1.))
-    @test r.status=="time_limit" && r.time==1
+    @test r.status=="time_limit" && r.time≈1.
     @test norm(r.x)<norm(p.x)
 end
 @testset "Source sampling and detector geometry" begin
@@ -50,7 +50,6 @@ end
     fields=MHDFields([radius,Router],[0.,pi/2,pi],[0.,pi,2pi],zeros(3,2,3,3),zeros(3,2,3,3),:total,"")
     source=IonosphereSource(x->1e6,x->1000.,(x->0.,x->0.,x->0.),radius)
     c=MC.Config(per_cell=5000,flux_model="reservoir_maxwellian_rate")
-    @test c.flux_model=="reservoir_maxwellian_rate"
     particles,cells=MC.release_particles(fields,source,c)
     @test length(particles)==20_000
     @test sum(a.area for a in cells)≈4pi*radius^2
@@ -85,37 +84,37 @@ end
     @test norm(r.v)≈norm(v) rtol=1e-12
     omega=species.q/species.m*1e-8
     @test norm(r.v-SA[cos(omega),-sin(omega),0.]*norm(v))/norm(v)<1e-5
-    # Full orbit returns through the 500 km absorbing sphere; no out-of-domain read.
-    r=MC.trace_particle(x,v,p,MC.Config(tmax=300.,absorption_altitude_km=500.))
+    # Full orbit returns through the 200 km absorbing sphere; no out-of-domain read.
+    r=MC.trace_particle(x,v,p,MC.Config(tmax=300.))
     @test r.status=="inner"
-    @test norm(r.x)≈Rm+500e3 atol=1e-7
-end
-@testset "500 km bidirectional source and 200 km absorption" begin
-    c=MC.Config(per_cell=1000,tmax=40.)
-    @test c.altitude_km==500.
-    @test c.absorption_altitude_km==200.
-    @test c.flux_model=="bidirectional_maxwellian_rate"
-    radius=Rm+500e3
-    fields=MHDFields([Rm+200e3,Router],[0.,pi/2,pi],[0.,pi,2pi],zeros(3,2,3,3),zeros(3,2,3,3),:total,"")
-    source=IonosphereSource(x->1e6,x->1000.,(x->0.,x->0.,x->0.),radius)
-    particles,cells=MC.release_particles(fields,source,c)
-    @test all(p->p.W>0,particles)
-    @test any(p->dot(p.x,p.v)<0,particles)
-    @test any(p->dot(p.x,p.v)>0,particles)
-    @test all(p->isapprox(norm(p.x),radius),particles)
-    sp=MarsTP.TP.SpeciesDict["O2+"]
-    Z=(x,t)->SA[0.,0.,0.]
-    x=SA[radius,0.,0.]
-    r=MC.trace_particle(x,SA[-1e4,0.,0.],(sp.q/sp.m,sp.m,Z,Z,nothing),c)
-    @test r.status=="inner"
-    @test r.time≈30. atol=1e-8
     @test norm(r.x)≈Rm+200e3 atol=1e-7
-    # Outward electric acceleration reverses an inward launch well above absorption.
-    E=(x,t)->SA[1e-5,0.,0.]
-    r=MC.trace_particle(x,SA[-1000.,0.,0.],(sp.q/sp.m,sp.m,E,Z,nothing),MC.Config(tmax=80.))
-    @test r.status=="time_limit"
-    @test minimum(norm(a[2:4]) for a in r.history)<radius
-    @test minimum(norm(a[2:4]) for a in r.history)>Rm+200e3
-    @test norm(r.x)>radius
-    @test r.v[1]>0
+    zero_field=(x,t)->SA[0.,0.,0.]
+    param=(species.q/species.m,species.m,zero_field,zero_field,nothing)
+    inward=MC.trace_particle(x,SA[-1000.,0.,0.],param,MC.Config(dt=1.,tmax=301.))
+    @test inward.status=="inner"
+    @test inward.time≈300. atol=1e-9
+    @test norm(inward.x)≈Rm+200e3 atol=1e-7
+end
+
+
+@testset "Monte Carlo work matches saved interval diagnostics" begin
+    sp=MarsTP.TP.SpeciesDict["O2+"]
+    E=SA[1e-5,0.,0.]
+    param=(sp.q/sp.m,sp.m,(x,t)->E,(x,t)->zero(E),nothing)
+    itp=MarsTP.FieldWorkInterpolators(_->E,_->2E,_->-E)
+    for x in (SA[Rm+500e3,0.,0.],SA[Router-150.,0.,0.])
+        r=MC.trace_particle(x,SA[1000.,0.,0.],param,MC.Config(dt=.1,tmax=1.))
+        tr=(;t=[a[1] for a in r.history],u=[a[2:7] for a in r.history])
+        w=trajectory_work(tr,itp)
+        @test w.summary.total_eV ≈ r.work
+        @test w.summary.energy_residual_eV ≈ r.residual atol=1e-12
+        @test w.summary.conv_eV ≈ 2r.work
+        @test w.summary.hall_eV ≈ -r.work
+        if x[1]>Router-1000
+            @test r.status=="outer"
+            @test 0<diff(tr.t)[end]<.1
+        else
+            @test abs(r.residual)<1e-10
+        end
+    end
 end

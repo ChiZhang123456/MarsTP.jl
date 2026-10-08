@@ -168,3 +168,48 @@ end
 
 """Compatibility alias for [`Electric_field_work_profile`](@ref)."""
 const field_work_profile = Electric_field_work_profile
+
+
+"""
+    trajectory_work(sol, itp; species="O2+", mode=:steps, power=false)
+
+Midpoint signed work on supplied intervals, in eV. N states give N-1 increments.
+Use full integration cadence before thinning. Summary mode uses constant memory
+unless endpoint power is requested. Positive/negative sums depend on cadence.
+"""
+function trajectory_work(sol,itp;species="O2+",mode=:steps,power=false)
+    mode in (:steps,:summary) || throw(ArgumentError("Invalid work mode"))
+    tr=_work_trajectory(sol);sp=TP.SpeciesDict[species];n=length(tr.t)
+    fields=(itp.total,itp.conv,itp.hall)
+    increments=mode==:steps ? zeros(n-1,3) : nothing
+    powers=power ? zeros(n,3) : nothing
+    totals=zeros(3);positive=zeros(3);negative=zeros(3)
+    kinetic(u)=sp.m*sum(abs2,u[4:6])/(2TP.eV)
+    k0=kinetic(first(tr.u));k1=kinetic(last(tr.u));maxresidual=0.
+    for i in 1:n
+        b=tr.u[i]
+        if power
+            for j in 1:3
+                powers[i,j]=_work_one(fields[j],SA[b[1],b[2],b[3]],SA[b[4],b[5],b[6]],sp.q,1.)/TP.eV
+            end
+        end
+        i==1 && continue
+        a=tr.u[i-1]
+        pm=SA[(a[1]+b[1])/2,(a[2]+b[2])/2,(a[3]+b[3])/2]
+        vm=SA[(a[4]+b[4])/2,(a[5]+b[5])/2,(a[6]+b[6])/2]
+        for j in 1:3
+            dw=_work_one(fields[j],pm,vm,sp.q,tr.t[i]-tr.t[i-1])/TP.eV
+            isfinite(dw) || error("Nonfinite work")
+            totals[j]+=dw;positive[j]+=max(dw,0);negative[j]+=min(dw,0)
+            increments===nothing || (increments[i-1,j]=dw)
+        end
+        maxresidual=max(maxresidual,abs(kinetic(b)-k0-totals[1]))
+    end
+    summary=(;total_eV=totals[1],conv_eV=totals[2],hall_eV=totals[3],
+        positive_total_eV=positive[1],positive_conv_eV=positive[2],positive_hall_eV=positive[3],
+        negative_total_eV=negative[1],negative_conv_eV=negative[2],negative_hall_eV=negative[3],
+        initial_kinetic_eV=k0,final_kinetic_eV=k1,delta_kinetic_eV=k1-k0,
+        energy_residual_eV=k1-k0-totals[1],max_abs_energy_residual_eV=maxresidual,
+        field_sum_residual_eV=totals[1]-totals[2]-totals[3])
+    return (;summary,increments,powers)
+end

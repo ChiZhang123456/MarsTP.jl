@@ -27,17 +27,14 @@ def sample_demo(count=100_000, seed=20260907):
     d2 = np.sum((velocity-bulk)**2,axis=1)
     # d=2: g2/gs2 = factor * exp[-d2/(2 sigma^2)*(1-1/factor)].
     importance = factor*np.exp(-d2/(2*sigma**2)*(1-1/factor))
-    normalized_weight = importance/importance.sum()
-    density_weight = n*normalized_weight
-    # Prescribed total injection rate is fixed for the entire patch.
+    density_weight = n*importance/importance.sum()
+    # Prescribed n|U_bulk| source rate, independent of individual velocity sign.
+    rate_weight = area*np.linalg.norm(bulk)*density_weight
     analytic_rate = n*area*np.linalg.norm(bulk)
-    rate_weight = analytic_rate*normalized_weight
     neff = importance.sum()**2/np.sum(importance**2)
     weighted_mean = np.sum(density_weight[:,None]*velocity,axis=0)/n
     assert np.isclose(density_weight.sum(),n,rtol=1e-14)
     assert np.all(rate_weight>0)
-    assert np.allclose(rate_weight,area*np.linalg.norm(bulk)*density_weight,rtol=1e-14)
-    assert np.allclose(rate_weight/rate_weight.max(),density_weight/density_weight.max(),rtol=1e-14)
     assert np.any(velocity[:,0]<0) and np.any(velocity[:,0]>0)
     assert np.all(abs(weighted_mean-bulk)<6*sigma/math.sqrt(neff))
     assert np.isclose(rate_weight.sum(),analytic_rate,rtol=1e-14)
@@ -66,14 +63,13 @@ def main():
     im=axes[0].pcolormesh(x/1000,y/1000,f2,cmap='turbo',shading='auto',norm=Normalize(0,f2.max()))
     axes[0].set_title('(a) Analytic Maxwellian',loc='left')
     fig.colorbar(im,ax=axes[0],label=r'$f_{xy}$ (s$^2$ m$^{-5}$)',shrink=.79)
-    sample_order=np.argsort(d['importance'])
     for ax,weights,title,label in zip(axes[1:],(d['density_weight'],d['rate_weight']),
-            ('(b) MC density weight','(c) MC injection-rate weight'),
+            ('(b) MC density weight','(c) MC flux (rate) weight'),
             (r'$W_{n,i}$ (m$^{-3}$)',r'$Q_i$ (s$^{-1}$)')):
         positive=weights>0
         if np.any(~positive):
             ax.scatter(*d['velocity'][~positive].T/1000,s=1,c='#cccccc',linewidths=0,rasterized=True)
-        order=sample_order[positive[sample_order]]
+        order=np.flatnonzero(positive)[np.argsort(weights[positive])]
         im=ax.scatter(*d['velocity'][order].T/1000,c=weights[order],s=1,
                       cmap='turbo',norm=Normalize(0,weights.max()),linewidths=0,rasterized=True)
         ax.set_title(title,loc='left')
@@ -82,7 +78,7 @@ def main():
         ax.set(xlim=np.array(xlim)/1000,ylim=np.array(ylim)/1000,
                xlabel=r'$v_x$ (km/s)',ylabel=r'$v_y$ (km/s)',aspect='equal')
     fig.suptitle('O$_2^+$: $n$ = 5 cm$^{-3}$, $U_x$ = -10 km/s, $T$ = 10 eV, $v_z$ = 0\n'
-                 f'{args.count:,} Maxwellian samples; '+r'$T_s=4T$; source area = 1 m$^2$, $Q_{\mathrm{cell}}=nA|\mathbf{U}|$, $Q_i=(Q_{\mathrm{cell}}/n)W_{n,i}$')
+                 f'{args.count:,} Maxwellian samples; '+r'$T_s=4T$; source area = 1 m$^2$, $F=n|\mathbf{U}|$')
     args.output.parent.mkdir(parents=True,exist_ok=True)
     fig.savefig(args.output,dpi=220,bbox_inches='tight')
     plt.close(fig)

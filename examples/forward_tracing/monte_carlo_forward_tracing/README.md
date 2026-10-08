@@ -10,9 +10,9 @@ Monte Carlo represents a continuous velocity distribution with a finite set of w
 
 ![Maxwellian and Monte Carlo particle weights](monte_carlo_sampling.png)
 
-The [plotting script](plot_monte_carlo_sampling.py) uses O₂⁺ at density 5 cm⁻³ (5×10⁶ m⁻³), bulk velocity (−10,0) km/s and physical temperature 10 eV. It draws 100,000 two-dimensional velocities with vz=0. The **sampling Maxwellian** has temperature 40 eV. A source area of **1 m²** and bulk speed **10 km/s** define the fixed total patch injection rate Q_cell = n A norm(U) = 5e10 s^-1. Both signs of each sampled velocity component are retained.
+The [plotting script](plot_monte_carlo_sampling.py) uses O₂⁺ at density 5 cm⁻³ (5×10⁶ m⁻³), bulk velocity (−10,0) km/s and physical temperature 10 eV. It draws 100,000 two-dimensional velocities with vz=0. The **sampling Maxwellian** has temperature 40 eV. A source area of **1 m²** and bulk speed **10 km/s** define the prescribed particle-rate weights. Both signs of each sampled velocity component are retained.
 
-All three panels use turbo. The left panel shows the analytical two-dimensional Maxwellian (s² m⁻⁵). The middle and right panels color individual samples by `density_weight` (m⁻³) and `flux_weight` (s⁻¹), respectively. Both panels use the same normalized importance weights: Wn_i = n w_i / sum(w) and Q_i = Q_cell w_i / sum(w) = (Q_cell/n) Wn_i. Their normalized colors and spatial patterns are identical; only colorbar values and units differ. No individual radial-speed factor or sign cutoff is applied in this illustration. This figure demonstrates the prescribed injection model (`flux_model=:bulk_speed`), while the shell default described below remains the bidirectional crossing model. Reconstruct the VDF with weighted velocity-bin sums, not scatter-point colors.
+All three panels use turbo. The left panel shows the analytical two-dimensional Maxwellian (s² m⁻⁵). The middle and right panels color individual samples by `density_weight` (m⁻³) and `flux_weight` (s⁻¹), respectively. The rate weight is the density weight multiplied by area and bulk speed. There is no velocity-sign cutoff or shaded excluded half-plane.
 
 ### 1.2 Maxwellian sampling and importance weights
 
@@ -45,44 +45,39 @@ The prefactor is c in the two-dimensional illustration and c^(3/2) in the three-
 
 The density-ratio principle also applies to a κ distribution: replace the physical and sampling probability densities by the intended normalized distributions, and evaluate their ratio at each sample. The sampling distribution must cover the support of the physical distribution. Efficient sampling of κ tails generally requires a suitable heavy-tailed sampling distribution. The current source function implements Maxwellian sampling; κ sampling requires an additional sampler and density evaluation. The Maxwellian exponential expression above does not apply unchanged to κ distributions.
 
-### 1.3 Density weights and bidirectional crossing rates
+### 1.3 Density and particle-rate weights
 
-The diagnostic self-normalized density weights are
+Let N be the dimensionless number of draws, n the number density in m⁻³, and w_i dimensionless importance weights. The density weight W_i^(n), in m⁻³, is:
 
-$$W_i^{(n)}=n w_i/\sum_jw_j.$$
+$$
+W_i^{(n)}=n\frac{w_i}{\sum_{j=1}^{N}w_j},\qquad \sum_iW_i^{(n)}=n.
+$$
 
-They sum exactly to n, but finite-sample moment estimates are biased. They do not determine the default crossing-rate weights.
+`particle_density_weight` evaluates this expression.
 
-The source is a prescribed bidirectional Maxwellian crossing ensemble at 500 km. It launches particles both into the region above the source and into the region below it. Define vr = v dot er, with radial unit vector er. For N untruncated velocity draws from gs,
+Let A be source area in m² and U the local MHD bulk velocity in m/s. The prescribed scalar source flux F is in m⁻² s⁻¹ and particle-rate weight Q_i is in s⁻¹:
 
-$$\boxed{Q_i=\frac{nA}{N}|\mathbf v_i\cdot\hat{\mathbf r}|\frac{g(\mathbf v_i)}{g_s(\mathbf v_i)}}.$$
+$$
+F=n|\mathbf U|,\qquad
+Q_i=FA\frac{w_i}{\sum_jw_j}=A|\mathbf U|W_i^{(n)},\qquad
+\sum_iQ_i=n|\mathbf U|A.
+$$
 
-Q_i is in s^-1 and is positive for both signs of vr when n>0 and vr is nonzero. It is a directional crossing-rate magnitude, not signed net flux. N includes every draw. There is no normalization by sum(w), by the number of draws of either sign, or by flight duration. `sample_maxwellian_source(...; normal=er, area_m2=A)` defaults to `flux_model=:bidirectional`.
+`sample_maxwellian_source(...; area_m2=A, flux_model=:bulk_speed)` evaluates this model by default. No normal is required. Both inward and outward velocities receive weights from the full drifting Maxwellian. Neither the bulk radial velocity nor the sampled radial velocity is used as a sign filter or rate factor. The factor is the **bulk speed**, not the speed of each sampled particle. A zero bulk speed gives zero injected rate, even at finite temperature.
 
-For radial bulk drift Ur and physical one-component thermal standard deviation sigma, let varphi and Phi be the standard normal density and cumulative distribution:
+This is a prescribed source injection model. It is not the signed flux through a sphere or the positive-half-space thermal crossing flux. The per-cell normalization fixes total injection exactly; self-normalized importance estimates of the velocity distribution have finite-sample bias, so convergence with particles per cell and effective sample size should be checked.
 
-$$F_+=n[\sigma\varphi(U_r/\sigma)+U_r\Phi(U_r/\sigma)],$$
-$$F_-=n[\sigma\varphi(U_r/\sigma)-U_r\Phi(-U_r/\sigma)].$$
+For reproducibility of earlier runs, `flux_model=:reservoir` in the sampler retains the previous `n A max(v dot normal,0) w/N` estimator and requires a normal. The shell example selects it explicitly with `flux_model="reservoir_maxwellian_rate"`. The older conditional-outward model is also available only by explicit selection. Neither is the default.
 
-F+ and F- are positive outward and inward crossing magnitudes. The sampled total rate estimates A(F+ + F-); signed net flux is F+ - F- = n Ur. At zero drift each direction has F = n sigma / sqrt(2 pi). Tangential bulk drift does not change these local rates.
+### 1.4 The 500 km ionospheric source
 
-This source prescription treats initial inward and outward launches as independent injection histories. A propagated particle may cross 500 km again, but keeps its original Q_i; no new particle or source weight is created at a return crossing. MHD moments alone do not establish a volume-production rate, and this imposed crossing ensemble is not a self-consistent ion-production model.
+MHD density, bulk velocity and temperature are read at each source cell at 500 km altitude. The source surface has a radial outward normal. The absorbing inner boundary is separately placed at 200 km altitude. Let r_s be the source radius in m, θ colatitude in rad and ϕ longitude in rad. Cell area A_cell is in m²:
 
-The explicit `flux_model=:reservoir` uses max(vr,0), for an outward-only reservoir source. The compatibility option `flux_model=:bulk_speed` uses n A norm(U) w_i / sum(w), for a prescribed bulk-speed injection model. Shell selections are `reservoir_maxwellian_rate` and `n_bulk_speed_maxwellian`, respectively. Neither option is the default. The older conditional-outward prescribed-rate option also remains explicit.
+$$
+A_{\rm cell}=r_s^2(\cos\theta_0-\cos\theta_1)(\phi_1-\phi_0).
+$$
 
-### 1.4 Source at 500 km, absorption at 200 km
-
-MHD density, Cartesian bulk velocity and temperature are evaluated at the area-coordinate midpoint of each native angular cell at 500 km altitude. The absorbing sphere is independently located at 200 km altitude. Both altitudes are above a Mars radius Rm=3390 km. With source radius rs in m, colatitude theta and longitude phi in rad,
-
-$$A_{cell}=r_s^2(\cos\theta_0-\cos\theta_1)(\phi_1-\phi_0).$$
-
-The default shell model is `bidirectional_maxwellian_rate`. Each cell supplies 100 untruncated three-dimensional velocity draws at Ts=4T. Inward draws carry positive normal-speed rate weights and propagate below 500 km. They may turn and return above the source; crossing the source is not a termination condition. Absorption occurs only on reaching the 200 km sphere. No volume production is included outside the source.
-
-`Config.altitude_km` remains the source-altitude setting for API compatibility; `Config.absorption_altitude_km` is the separate lower boundary. Defaults are 500 and 200. The stored field mesh must cover both radii. The code validates coverage and does not extrapolate below the field domain.
-
-All draws within a cell launch from the same midpoint. This is spatial midpoint quadrature, not uniform random area sampling. Spatial refinement must be checked, especially for localized detector contributions. `cell_stride>1` skips cells without compensating their area and therefore describes only the sampled patches, not a full-shell rate estimate.
-
-At c=Ts/T=4, the asymptotic importance-weight ESS fraction is (2c-1)^(3/2)/c^3 = 0.289. Thus 100 draws give roughly 29 effective density samples per cell. This ESS does not measure uncertainty of crossing rates or detector occupancy. Compare independent seeds, particles per cell, sampling temperature and spatial resolution before interpreting rare trajectories.
+Each angular cell supplies 100 three-dimensional velocity samples. Weights use the local density, cell area and bulk-speed magnitude. The sampling Maxwellian temperature is four times the local physical temperature. No volume production is included outside the ionosphere. Inward launch velocities are retained with their positive source weights, and propagate below the source until they reach the 200 km absorbing boundary, the outer boundary, or the time limit. This is a transport boundary condition, not a sampling rejection. Escaping or detector-reaching rates therefore need not equal the prescribed injection rate.
 
 ### 1.5 Bulk-speed flux maps
 
@@ -101,7 +96,7 @@ $$
 \frac{d\mathbf v}{dt}=\frac qm(\mathbf E+\mathbf v\times\mathbf B).
 $$
 
-[ShellMonteCarlo.run_monte_carlo](monte_carlo_shell.jl) calls `ShellMonteCarlo.trace_particle`, which uses `MarsTP.TP.boris_velocity_update`. The fields are static total MHD E and B. Integration uses half-step velocities, while saved velocities are synchronized with saved positions.
+[ShellMonteCarlo.run_monte_carlo](monte_carlo_shell.jl) calls `ShellMonteCarlo.trace_particle`, which uses `MarsTP.TP.update_velocity_boris`. The fields are static total MHD E and B. Integration uses half-step velocities, while saved velocities are synchronized with saved positions.
 
 | Parameter | Setting |
 | --- | --- |
@@ -119,44 +114,123 @@ Each trajectory retains its Q_i during lossless propagation.
 
 ![20,000 randomly selected O2+ trajectories in XY, XZ and YZ](trajectories_5000.png)
 
-This historical figure has not been recomputed with the bidirectional default. It shows 20,000 randomly selected O₂⁺ forward trajectories using the updated `n*norm(U_bulk)` source. Panels show XY, XZ and YZ projections, from left to right. Dashed and dotted curves mark the bow shock (BS) and magnetic pileup boundary (MPB); in the YZ panel these boundaries are cross-sections at X=0. Positions are normalized by the Mars radius, Rm=3390 km. The image retains the filename `trajectories_5000.png` for link compatibility; the displayed sample contains 20,000 trajectories.
+The figure shows 20,000 randomly selected O₂⁺ forward trajectories using the updated `n*norm(U_bulk)` source. Panels show XY, XZ and YZ projections, from left to right. Dashed and dotted curves mark the bow shock (BS) and magnetic pileup boundary (MPB); in the YZ panel these boundaries are cross-sections at X=0. Positions are normalized by the Mars radius, Rm=3390 km. The image retains the filename `trajectories_5000.png` for link compatibility; the displayed sample contains 20,000 trajectories.
 
 ### 2.3 Satellite orbit and particle distributions
 
 ![O2+ trajectories, a circular orbit at 2.5 Rm and corresponding energy and reduced velocity distributions](satellite_orbit_distributions.png)
 
-This historical figure has not been recomputed with the bidirectional default. The left panel combines 20,000 O₂⁺ trajectories with a prescribed circular satellite orbit in the Y=0 plane at a Mars-centered radius of **2.5 Rm**. The right panels show the corresponding direction-averaged DEF and one-dimensional reduced distributions in vx, vy and vz versus orbit angle. See [orbit geometry, distribution definitions and interpretation](satellite_orbit_distributions.md).
+The left panel combines 20,000 O₂⁺ trajectories with a prescribed circular satellite orbit in the Y=0 plane at a Mars-centered radius of **2.5 Rm**. The right panels show the corresponding direction-averaged DEF and one-dimensional reduced distributions in vx, vy and vz versus orbit angle. See [orbit geometry, distribution definitions and interpretation](satellite_orbit_distributions.md).
 
 ## 3. Detector PSD and integrated VDF
 
-### 3.1 Particle rate times residence time
+### 3.1 Residence time τ: what is being counted?
 
-Let dN be particle count, x position in m, v velocity in m/s and n number density in m⁻³. The three-dimensional velocity distribution f has units s³ m⁻⁶:
+The detector is a **fixed cube in physical space**. To reconstruct its velocity distribution, we also divide velocity space into small three-dimensional bins. For each trajectory, we ask: **how much time does the particle spend inside the detector while its velocity lies in a particular bin?** This accumulated time is $\tau_{i,D,b}$, called the residence time for trajectory $i$, detector $D$, and velocity bin $b$.
+
+#### Symbols and units
+
+| Symbol | Meaning | Unit |
+| --- | --- | --- |
+| $i$ | Index of one sampled source particle and its trajectory | Dimensionless |
+| $D$ | Spatial region occupied by the fixed detector cube | A region, not a number |
+| $L$, $V_D=L^3$ | Detector side length and volume; here $L=0.2R_m=678{,}000$ m | m, m³ |
+| $b$, $B_b$ | Index of a velocity bin and the region it covers in $(v_x,v_y,v_z)$ space | Index and region |
+| $\Delta v_x,\Delta v_y,\Delta v_z$ | Widths of that bin along the three velocity axes | m/s |
+| $\Delta^3v_b=\Delta v_x\Delta v_y\Delta v_z$ | Volume of the velocity bin, not a physical-space volume | m³ s⁻³ |
+| $t$ | Elapsed time since the particle was launched, also called flight age | s |
+| $T_i$ | Final saved flight age of trajectory $i$, determined by termination or the time limit | s |
+| $\mathbf x_i(t)$, $\mathbf v_i(t)$ | Position and velocity of trajectory $i$ at flight age $t$ | m, m/s |
+| $\tau_{i,D,b}$ | Total time for which both $\mathbf x_i(t)\in D$ and $\mathbf v_i(t)\in B_b$ | s |
+| $Q_i$ | Physical injection rate represented by sampled trajectory $i$, defined in Section 1.3 and stored as `rate_weights_s` | s⁻¹ |
+| $N_{D,b}$ | Estimated mean number of physical particles simultaneously inside $D$ with velocities in $B_b$ | Particle count, dimensionless |
+| $\bar f_{D,b}$ | Phase-space density (PSD), averaged over the detector volume and velocity bin | s³ m⁻⁶ |
+
+For example, a velocity bin can cover $0\leq v_x<5$, $-5\leq v_y<0$, and $10\leq v_z<15$ km/s. A particle belongs to this bin only when **all three** component conditions hold. Each width is 5000 m/s, so $\Delta^3v_b=(5000\ \mathrm{m/s})^3$. The index $b$ labels this entire three-dimensional bin, not just a speed interval.
+
+#### Reading the residence-time integral
+
+Define two indicator functions. Each is simply a switch that is either 0 or 1:
 
 $$
-dN=f(\mathbf x,\mathbf v)d^3x\,d^3v,\qquad n(\mathbf x)=\int f(\mathbf x,\mathbf v)d^3v.
+\mathbf 1_D[\mathbf x_i(t)]=
+\begin{cases}
+1, & \text{particle }i\text{ is inside the detector at time }t,\\
+0, & \text{otherwise},
+\end{cases}
 $$
 
-The cube side L=0.2 Rm=678,000 m and volume V_D is in m³. Velocity-bin widths Δv_x, Δv_y and Δv_z are in m/s, giving velocity-space volume Δ³v_b in m³ s⁻³:
-
 $$
-V_D=L^3,\qquad \Delta^3v_b=\Delta v_x\Delta v_y\Delta v_z.
-$$
-
-Let τ_i,D,b be residence time in s, T_i the saved flight duration in s, x_i position in m and v_i velocity in m/s. Indicator functions for the spatial cube D and velocity bin B_b are dimensionless:
-
-$$
-\tau_{i,D,b}=\int_0^{T_i}\mathbf1_D[\mathbf x_i(t)]\mathbf1_{B_b}[\mathbf v_i(t)]\,dt.
+\mathbf 1_{B_b}[\mathbf v_i(t)]=
+\begin{cases}
+1, & \text{its velocity is inside bin }B_b\text{ at time }t,\\
+0, & \text{otherwise}.
+\end{cases}
 $$
 
-For a steady source, Q_i is in s⁻¹, τ_i,D,b in s, and N_D,b is mean particle count. With V_D in m³ and Δ³v_b in m³ s⁻³, the bin-averaged PSD f̄_D,b is in s³ m⁻⁶:
+Their product equals 1 only when both conditions hold. Thus
 
 $$
-N_{D,b}=\sum_iQ_i\tau_{i,D,b},\qquad
-\boxed{\bar f_{D,b}=\frac{\sum_iQ_i\tau_{i,D,b}}{V_D\Delta^3v_b}}.
+\boxed{\tau_{i,D,b}=\int_0^{T_i}
+\mathbf 1_D[\mathbf x_i(t)]\,
+\mathbf 1_{B_b}[\mathbf v_i(t)]\,dt}
 $$
 
-Q_i already contains sampling normalization, so there is no additional division by particle number or total integration time. For steady sources and static fields, the maximum flight age sets the truncation of the residence integral. This detector estimator does not depend on choosing a Maxwellian source.
+means “add up all the small time intervals $dt$ during which both conditions hold.” Time outside the cube contributes zero. Time inside the cube but in another velocity bin also contributes zero to this particular bin.
+
+Equivalently, if the simultaneous conditions hold during separate intervals indexed by $k$,
+
+$$
+\tau_{i,D,b}=\sum_k
+\left(t_{k,\mathrm{end}}-t_{k,\mathrm{start}}\right).
+$$
+
+Here $t_{k,\mathrm{start}}$ and $t_{k,\mathrm{end}}$ are the start and end flight ages of each qualifying interval. An interval can end because the particle leaves the cube, changes velocity bin, or its saved trajectory ends. Repeated visits are all included.
+
+**Example.** Suppose a trajectory lasts $T_i=100$ s. It is inside the detector from 10 to 14 s and again from 30 to 32 s. Its total detector residence time is therefore $\tau_{i,D}=4+2=6$ s. If its velocity lies in bin $B_b$ only from 11 to 13 s and from 30 to 31 s during those visits, then
+
+$$
+\tau_{i,D,b}=(13-11)+(31-30)=3\ \mathrm{s}.
+$$
+
+The 100 s flight duration, 6 s detector residence, and 3 s residence in this particular velocity bin are different quantities. When velocity is unrestricted,
+
+$$
+\tau_{i,D}=\int_0^{T_i}\mathbf 1_D[\mathbf x_i(t)]\,dt.
+$$
+
+Summing $\tau_{i,D,b}$ over bins gives $\tau_{i,D}$ only if those bins cover every velocity encountered inside the detector. The returned `residence_s` stores $\tau_{i,D}$, while `outside_vlim_residence_s` records detector residence outside the selected velocity range.
+
+#### Why multiply residence time by the source rate?
+
+For a steady source in static fields, a sampled trajectory represents continuous injection at rate $Q_i$, with particles launched at different times following the same path. The number occupying a given part of that path is the injection rate multiplied by the time spent there:
+
+$$
+N_{i,D,b}=Q_i\tau_{i,D,b},\qquad
+N_{D,b}=\sum_i Q_i\tau_{i,D,b}.
+$$
+
+For example, $Q_i=100$ particles/s and $\tau_{i,D,b}=3$ s contribute 300 physical particles to the mean occupancy of this detector and velocity bin. This is a weighted population estimate, not a count of 300 simulated trajectories or 300 detector crossing events. A longer residence produces a larger occupancy for the same injection rate.
+
+To convert occupancy into PSD, first divide by the detector volume to obtain the number density contributed by this velocity bin, then divide by the velocity-bin volume:
+
+$$
+n_{D,b}=\frac{N_{D,b}}{V_D},\qquad
+\boxed{\bar f_{D,b}=\frac{N_{D,b}}{V_D\Delta^3v_b}
+=\frac{\sum_iQ_i\tau_{i,D,b}}{V_D\Delta^3v_b}}.
+$$
+
+Here $n_{D,b}$ has units m⁻³. The PSD units follow directly:
+
+$$
+[\bar f_{D,b}]=\frac{\mathrm{s}^{-1}\mathrm{s}}
+{\mathrm{m}^3(\mathrm{m/s})^3}
+=\mathrm{s}^3\mathrm{m}^{-6}.
+$$
+
+This is the finite-bin version of $dN=f(\mathbf x,\mathbf v)\,d^3x\,d^3v$, where $dN$ is the particle population in a small spatial volume $d^3x$ and velocity-space volume $d^3v$. Integrating $f$ over velocity gives number density: $n(\mathbf x)=\int f(\mathbf x,\mathbf v)\,d^3v$.
+
+**There is no additional division by the number of sampled particles or by $T_i$.** The source rate $Q_i$ already includes Monte Carlo normalization. Dividing $\tau_{i,D,b}$ by $T_i$ would instead give the fraction of this trajectory's flight spent in the bin, which is a different quantity. The maximum flight age truncates the residence integral; a time-limited trajectory may have later contributions that are not included. A converged steady-state interpretation therefore requires checking that increasing the maximum flight age does not materially change the detector result. The residence-time estimator itself does not require a Maxwellian source.
 
 ### 3.2 Functions and binning
 
@@ -164,7 +238,7 @@ Q_i already contains sampling normalization, so there is no additional division 
 - [forward_psd_saved and foreach_saved_trajectory](../../../src/tracing/trajectory_io.jl): trajectories on disk.
 - [analyze_saved_probes.jl](analyze_saved_probes.jl): multiple detectors in one pass through the files.
 
-Position and synchronized velocity are linearly interpolated between saved states. Let α, α_a and α_b be dimensionless segment fractions; x_0 and x_1 are in m, v_0 and v_1 in m/s, and Δt and δt in s:
+The code evaluates residence time from consecutive saved states. Let their times be $t_0$ and $t_1$, with $\Delta t=t_1-t_0$ in seconds. Their positions are $\mathbf x_0,\mathbf x_1$ in m and synchronized velocities are $\mathbf v_0,\mathbf v_1$ in m/s. The dimensionless fraction $\alpha=(t-t_0)/\Delta t$ runs from 0 at the first state to 1 at the next. Position and velocity are linearly interpolated over this segment. If a qualifying piece starts at fraction $\alpha_a$ and ends at $\alpha_b$, its contribution to $\tau_{i,D,b}$ is the duration $\delta t$:
 
 $$
 \mathbf x(\alpha)=\mathbf x_0+\alpha(\mathbf x_1-\mathbf x_0),\quad
@@ -238,7 +312,7 @@ $$
 
 This monoenergetic beam identity checks the detector estimator. For the prescribed broad-distribution source, individual rates scale with bulk speed and importance weight, so the source is not a thermal reservoir crossing model.
 
-> The trajectory, satellite and detector PSD figures are historical results and have not been recomputed with the bidirectional default. Only the sampling illustration reflects the corrected source weights.
+> The detector PSD illustration is a historical result from before the bulk-speed source update and has not been recomputed with the new weights. The trajectory illustration in Section 2.2 has been replaced with 20,000 randomly selected O₂⁺ trajectories from the updated source model.
 
 ### 3.6 Omnidirectional differential energy flux
 
@@ -252,8 +326,7 @@ Run from the repository root using the Julia project environment. Sampling and t
 include("examples/forward_tracing/monte_carlo_forward_tracing/monte_carlo_shell.jl")
 ShellMonteCarlo.run_monte_carlo("outputs/my_run",
     ShellMonteCarlo.Config(per_cell=100, dt=0.1, tmax=500., batch_size=1024,
-                          altitude_km=500., absorption_altitude_km=200.,
-                          flux_model="bidirectional_maxwellian_rate", compress_trajectories=false))
+                          flux_model="n_bulk_speed_maxwellian", compress_trajectories=false))
 ```
 
 [write_trajectory_batch](../../../src/tracing/trajectory_io.jl) saves batches of paths and weights. Position, velocity and time use m, m/s and s. `rate_weights_s` is in s⁻¹ and `source_density_weights_m3` in m⁻³:
@@ -293,24 +366,14 @@ Python requires NumPy, Matplotlib and h5py. Trajectory backgrounds use [src/visu
 | [analyze_saved_probes.jl](analyze_saved_probes.jl) | Detector PSD from saved paths |
 | [plot_library_psd.py](plot_library_psd.py) | Integrated two-dimensional VDFs |
 
-## Historical validation of the bulk-speed update
+## Validation of the bulk-speed update
 
-The following results refer to the earlier bulk-speed implementation, not the corrected bidirectional default. See the reservoir validation below.
+Validated with Julia 1.12.6 and TestParticle 0.24.1. The package suite passed 503 assertions and the shell suite passed 255 assertions. Checks include exact patch-rate normalization, both radial velocity signs with positive weights, independence from normal direction, zero rate at zero bulk speed, the explicit legacy estimator, and inward propagation below the source and analytic absorption at 200 km.
 
-Validated with Julia 1.12.6 and TestParticle 0.23.3. The package suite passed 420 assertions and the shell suite passed 240 assertions. Checks include exact patch-rate normalization, both radial velocity signs with positive weights, independence from normal direction, zero rate at zero bulk speed, the explicit legacy estimator, and immediate absorption of inward launches.
-
-A local-field smoke run used 6 source cells, 10 particles per cell, dt=0.1 s and maximum age 0.2 s. All 60 saved particles had positive rate weights; 28 inward launches terminated at time zero and 32 reached the time limit. Total prescribed injection was 2.984432090205178e21 s^-1 for the sampled cells, with per-cell sums and all saved rate weights verified. This short run is an implementation check, not an escape-rate or detector-PSD convergence result. The full million-particle ensemble was not rerun.
+A historical local-field smoke run with the former 500 km absorbing boundary used 6 source cells, 10 particles per cell, dt=0.1 s and maximum age 0.2 s. All 60 saved particles had positive rate weights; 28 inward launches terminated at time zero and 32 reached the time limit. Total prescribed injection was 2.984432090205178e21 s^-1 for the sampled cells, with per-cell sums and all saved rate weights verified. This short run is an implementation check, not an escape-rate or detector-PSD convergence result. The full million-particle ensemble was not rerun.
 
 ```powershell
 julia --startup-file=no --compiled-modules=existing --project=. test/runtests.jl
 julia --startup-file=no --compiled-modules=existing --project=. examples/forward_tracing/monte_carlo_forward_tracing/test_monte_carlo.jl
-julia --startup-file=no --compiled-modules=existing --project=. examples/forward_tracing/monte_carlo_forward_tracing/monte_carlo_shell.jl outputs/new_bulk_speed_smoke 2000 0.2 0.1 10 n_bulk_speed_maxwellian
+julia --startup-file=no --compiled-modules=existing --project=. examples/forward_tracing/monte_carlo_forward_tracing/monte_carlo_shell.jl outputs/new_bulk_speed_smoke 2000 0.2 0.1 10
 ```
-
-## Validation of the separated source and absorption boundaries
-
-With Julia 1.12.6 and TestParticle 0.23.3, the corrected package suite passed 532 assertions and the shell suite passed 257 assertions. Tests cover bidirectional crossing-rate sums, positive inward weights, outward-only compatibility, zero-field slab density recovery, travel from 500 km to absorption at 200 km, and an inward launch that turns under an outward electric field and returns above 500 km without termination at the source.
-
-A local MHD smoke check used 6 sampled cells, 10 draws per cell and 0.2 s of propagation. The actual stored mesh minimum is 199.646643 km. All 28 inward launches out of 60 samples carried positive rate and propagated to the time limit, with none terminated at the 500 km source. This short check is not a convergence result. The updated prescribed-rate 2D illustration has total density 5e6 m^-3 and total injection rate 5e10 s^-1. Its per-particle rate weights are exactly the density weights multiplied by A norm(U); this plot is a separate source prescription from the bidirectional shell default.
-
-These controlled tests establish implementation behavior, not the frequency of returning trajectories in the actual MHD field. Historical trajectory and detector figures have not been recomputed with the separated boundaries.

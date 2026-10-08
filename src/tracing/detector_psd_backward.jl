@@ -116,13 +116,18 @@ function _trace_sources(position, velocity, param, config, volume_source, ionosp
     endpoint, end_velocity = Ref(position), Ref(velocity)
     end_time = Ref(config.tspan[1])
     function boundary(u, p, t)
-        if !all(isfinite, u) || !isfinite(t)
+        if !all(isfinite, u[1:3]) || !isfinite(t)
             status[] = 3
             return true
         end
         step = t-previous_t[]
         step < 0 || error("Backtrace time must decrease")
-        r, vhalf = SVector{3,Float64}(u[1:3]), SVector{3,Float64}(u[4:6])
+        r = SVector{3,Float64}(u[1:3])
+        # 0.24 callbacks expose node velocity. The displacement gives the
+        # actual drift/half-step velocity, also when the endpoint is outside
+        # the table and its synchronized velocity is NaN. Check the crossing
+        # before evaluating fields at the safe accepted part of this segment.
+        vhalf = (r-previous[])/step
         fraction, flag = _backtrace_crossing(previous[], r, Rinner, outer)
         events = config.include_ionosphere ? _shell_crossings(previous[],r,shell,fraction) : Float64[]
         nodes = [(f,true) for f in events]
@@ -133,8 +138,7 @@ function _trace_sources(position, velocity, param, config, volume_source, ionosp
             x = previous[] + f*(r-previous[])
             hit_t = previous_t[] + f*step
             safe_x = x/norm(x)*clamp(norm(x),Rinner+1e-8,outer-1e-8)
-            # Callback vhalf lives at previous_t + step/2, for both Boris solvers.
-            v = TP.update_velocity(vhalf,safe_x,(f-0.5)*step,hit_t,p)
+            v = TP.update_velocity(vhalf,safe_x,(f-0.5)*step,hit_t,p,TP.Boris())
             all(isfinite,v) || error("Invalid synchronized velocity at $safe_x")
             q = volume_source(safe_x,v)
             volume[] += 0.5*(last_q+q)*abs((f-last_fraction)*step)

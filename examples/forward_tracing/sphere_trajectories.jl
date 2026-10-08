@@ -10,7 +10,7 @@ function trace_particle(p0, param, dt, limit)
     status = Ref("time_limit")
     function boundary(u, p, t)
         r = SA[u[1], u[2], u[3]]
-        if !all(isfinite, u)
+        if !all(isfinite, u[1:3])
             status[] = "nonfinite"
             return true
         end
@@ -31,13 +31,14 @@ function trace_particle(p0, param, dt, limit)
             hit_t[] = previous_t[] + fraction * (t - previous_t[])
             return true
         end
+        all(isfinite,u) || error("Nonfinite in-domain velocity")
         previous[] = r
         previous_t[] = t
         return false
     end
     prob = TP.TraceProblem(vcat(p0, SA[0.0, 0.0, 0.0]), (0.0, limit), param)
     sol = TP.solve(prob, TP.Boris(); dt, isoutside = boundary,
-        savestepinterval = 5, maxiters = ceil(Int, limit / dt) + 1).u[1]
+        saveat = 5dt, maxiters = ceil(Int, limit / dt) + 1)
     points = [SA[u[1], u[2], u[3]] / Rm for u in sol.u]
     if status[] in ("inner", "outer")
         push!(points, endpoint[] / Rm)

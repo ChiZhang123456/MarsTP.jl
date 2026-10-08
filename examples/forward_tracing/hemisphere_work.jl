@@ -19,12 +19,13 @@ function main()
     Threads.@threads for id in ids
         status = Ref("time_limit")
         function outside(u,p,t)
-            all(isfinite,u) || error("Nonfinite trajectory for particle $id")
+            all(isfinite,u[1:3]) || error("Nonfinite position for particle $id")
             r=norm(SA[u[1],u[2],u[3]])
             if r<Rinner || r>Router
                 status[]=r<Rinner ? "inner" : "outer"
                 return true
             end
+            all(isfinite,u) || error("Nonfinite in-domain velocity")
             return false
         end
         prob=TP.TraceProblem(vcat(positions[id],SA[0.,0.,0.]),(0.,20000.),param)
@@ -33,8 +34,8 @@ function main()
         actual_dt = 0.1
         for dt in (0.1, 0.05, 0.025, 0.0125)
             status[] = "time_limit"
-            sol=TP.solve(prob,TP.Boris();dt,isoutside=outside,savestepinterval=1,
-                maxiters=ceil(Int,20000/dt)+1).u[1]
+            sol=TP.solve(prob,TP.Boris();dt,isoutside=outside,
+                maxiters=ceil(Int,20000/dt)+1)
             p=Electric_field_work_profile(sol,itp)
             actual_dt = dt
             abs(p.summary.energy_residual_eV)/max(abs(p.summary.delta_kinetic_eV),1.) <= 1e-3 && break

@@ -10,6 +10,7 @@ using ReadVTK
 using FastInterpolations
 using CairoMakie
 using TestParticle
+import KernelAbstractions as KA
 using VelocityDistributionFunctions
 
 import TestParticle as TP
@@ -28,7 +29,7 @@ export forward_psd, ForwardPSDAccumulator, accumulate_forward_psd!, finish_forwa
 export write_trajectory_batch, foreach_saved_trajectory, forward_psd_saved
 export MonteCarloWeight, thermal_speed_from_temperature_ev, maxwellian_importance_weight_3d
 export particle_density_weight, sample_maxwellian_source
-export build_field_work_interpolators, field_work
+export trajectory_work, build_field_work_interpolators, field_work
 export Electric_field_work_profile, field_work_profile, particle_field_work
 export plot_vx_vz, load_detector_vdf
 export o2plus_production_density

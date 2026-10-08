@@ -1,5 +1,8 @@
 .DS_Store
 output/
+outputs/
+__pycache__/
+*.pyc
 logs/
 *.jld2
 *.png

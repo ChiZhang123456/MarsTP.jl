@@ -26,6 +26,11 @@ at `data/mars_fields_spherical_from_dat.vts` before running tracing.
 
 ## Basic Use
 
+Fixed-step forward tracing can use NVIDIA GPUs through TestParticle 0.24:
+see [CPU/GPU example, benchmark and limitations](examples/gpu/README.md).
+Pass `backend=CUDA.CUDABackend()` and `solver=:boris` to `trace_forward`.
+The source-accumulating backward VDF remains on CPU.
+
 Monte Carlo Maxwellian initial states and physical weights are available via
 `sample_maxwellian_source`. See [weight definitions and units](examples/forward_tracing/monte_carlo_weights.md)
 and the [local MHD source example](examples/forward_tracing/maxwellian_source.jl).
@@ -163,3 +168,48 @@ Run `julia --project=. test/runtests.jl` for analytic tests and
 ## Trajectory visualization
 
 [src/visualization](src/visualization/README.md) provides standalone Python plots of Mars, BS/MPB and two- or three-dimensional trajectories, with species and particle-ID selection from forward or backward trajectory files.
+
+
+## Save forward electric work
+
+Pass the same-grid field interpolators when writing each full-cadence batch:
+
+```julia
+itp = build_field_work_interpolators() # for the default MarsTP field grid
+write_trajectory_batch("outputs/new_run/trajectories_00001.jld2", solutions;
+    particle_ids=collect(1:length(solutions)), rate_weights_s=rate_weights_s,
+    work_itp=itp, work_mode=:steps, save_power=false)
+foreach_saved_trajectory("outputs/new_run/trajectories_00001.jld2") do r
+    dw = r.work.steps["hall"]       # eV, N-1 intervals
+    cumulative = vcat(0., cumsum(dw))
+    mean_power = dw ./ diff(r.trajectory.t) # eV/s, actual interval duration
+    summary = r.work.summary
+end
+```
+
+Use `work_mode=:summary` for signed totals, positive/negative interval sums,
+initial/final kinetic energy, final and maximum absolute energy-closure residuals,
+and final field-sum residual, without allocating interval-work histories.
+`save_power=true` additionally saves instantaneous endpoint power (N samples).
+Default `:none` preserves existing writer behavior. New diagnostic batches use
+format 2; the reader also accepts format 1 and legacy files (`r.work === nothing`).
+The 7-row state matrix and physical particle weights are unchanged.
+
+Work is midpoint q E dot v dt along the same total-field trajectory, with charge
+from the selected species. Compute at full integration cadence before thinning;
+this writer cannot reconstruct missing steps. No fixed 0.1 s assumption is made.
+Total-field work is independently evaluated. Positive/negative sums retain their
+signs and depend on temporal resolution. Near-zero net work has no stable fraction.
+For ensemble fractions sum weighted work before dividing, rather than averaging
+particle fractions. Detector-conditioned analysis uses work up to the relevant
+visit and the chosen crossing/residence weights; terminal work is not a substitute.
+No field-removal counterfactual is implied by these fractions.
+
+The canonical `examples/forward_tracing/monte_carlo_forward_tracing/monte_carlo_shell.jl`
+enables `Config(work_mode=:steps, save_power=false)` by default and uses the
+validated actual VTK radial axis for all three components. It records diagnostics
+for each batch, including zero-rate particles (empty interval arrays, zero work).
+Its CSV total-work diagnostic now uses the same midpoint convention; previous
+run outputs are retained and their earlier quadrature values are not rewritten.
+The current MC writer receives every integration step. If trajectory thinning is
+introduced later, work must be accumulated on internal steps before that thinning.

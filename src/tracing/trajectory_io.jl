@@ -2,7 +2,7 @@
     write_trajectory_batch(path, trajectories; particle_ids, rate_weights_s,
         source_density_weights_m3=nothing, cell_ids=nothing,
         termination_codes=nothing, species="O2+", coordinate_system="unspecified",
-        compress=false)
+        compress=false, work_itp=nothing, work_mode=:none, save_power=false)
 
 Write one bounded batch of synchronized Cartesian trajectories to JLD2.
 Never overwrites an existing path. Each p<ID>/state is Float64 7×N with rows
@@ -11,10 +11,19 @@ Compression is optional. A `complete=true` marker is written only after all
 records succeed. Call this after each tracing batch, then release that batch;
 do not first collect the entire 50 GB ensemble. Failed partial files are kept
 for diagnosis and rejected by the reader. Input accepts trajectories with t/u.
+Set work_mode=:steps or :summary and pass work_itp to enable format v2 diagnostics.
+Steps stores p<ID>/work/dW_{total,conv,hall}_eV with N-1 intervals; summary
+stores signed totals, positive/negative sums, endpoint kinetic energy and closure.
+Optional endpoint powers use N samples. Supply full cadence trajectories: this
+writer cannot recover work on omitted integration steps. :none preserves v1.
 """
 function write_trajectory_batch(path,trajectories;particle_ids,rate_weights_s,
         source_density_weights_m3=nothing,cell_ids=nothing,termination_codes=nothing,
-        species="O2+",coordinate_system="unspecified",compress=false)
+        species="O2+",coordinate_system="unspecified",compress=false,
+        work_itp=nothing,work_mode=:none,save_power=false)
+    work_mode in (:none,:summary,:steps) || throw(ArgumentError("Invalid work mode"))
+    work_mode==:none && save_power && throw(ArgumentError("Power requires work mode"))
+    work_mode!=:none && work_itp===nothing && throw(ArgumentError("Work interpolators required"))
     ispath(path) && throw(ArgumentError("Refusing to overwrite $path"))
     haskey(TP.SpeciesDict,species) || throw(ArgumentError("Unknown species"))
     n=length(trajectories)
@@ -35,7 +44,14 @@ function write_trajectory_batch(path,trajectories;particle_ids,rate_weights_s,
     end
     mkpath(dirname(abspath(path)))
     jldopen(path,"w";compress) do file
-        file["format_version"]=1
+        file["format_version"]=work_mode==:none ? 1 : 2
+        if work_mode!=:none
+            file["work_mode"]=String(work_mode)
+            file["work_method"]="midpoint q E dot v dt on supplied intervals"
+            file["work_unit"]="eV"
+            file["power_unit"]="eV s^-1"
+            file["work_components"]=["total","conv","hall"]
+        end
         file["particle_ids"]=Int.(particle_ids)
         file["species"]=String(species)
         file["coordinate_system"]=String(coordinate_system)
@@ -53,6 +69,16 @@ function write_trajectory_batch(path,trajectories;particle_ids,rate_weights_s,
             cell_ids===nothing || (file["$prefix/cell_id"]=Int(cell_ids[i]))
             code=termination_codes===nothing ? (hasproperty(traj,:retcode) ? string(traj.retcode) : "unavailable") : string(termination_codes[i])
             file["$prefix/termination_code"]=code
+            if work_mode!=:none
+                w=trajectory_work(traj,work_itp;species,mode=work_mode,power=save_power)
+                for (key,value) in pairs(w.summary)
+                    file["$prefix/work/summary/$key"]=value
+                end
+                for (j,name) in enumerate(("total","conv","hall"))
+                    w.increments===nothing || (file["$prefix/work/dW_$(name)_eV"]=w.increments[:,j])
+                    w.powers===nothing || (file["$prefix/work/power_$(name)_eV_s"]=w.powers[:,j])
+                end
+            end
         end
         file["complete"]=true
     end
@@ -64,7 +90,8 @@ end
 
 Read one trajectory at a time and call callback(record), where record contains
 particle_id, rate_weight_s, trajectory (t/u), source_density_weight_m3, cell_id,
-and termination_code. Supports both write_trajectory_batch format and the
+and termination_code, plus work (nothing for older files). Work contains summary,
+steps and powers dictionaries. Supports both write_trajectory_batch format and the
 original p<ID>/state legacy batches. A directory must have completion.toml with
 complete=true and metadata.toml with matching n_particles/species. Explicit
 file lists support partial-run inspection; completeness is then per new batch.
@@ -90,7 +117,7 @@ function foreach_saved_trajectory(callback,source;species="O2+",progress=nothing
         jldopen(path,"r") do file
             modern=haskey(file,"format_version")
             if modern
-                file["format_version"]==1 || throw(ArgumentError("Unsupported trajectory format"))
+                file["format_version"] in (1,2) || throw(ArgumentError("Unsupported trajectory format"))
                 haskey(file,"complete") && file["complete"]===true || throw(ArgumentError("Incomplete batch: $path"))
                 file["species"]==species || throw(ArgumentError("Saved species mismatch"))
                 file["weight_unit"]=="s^-1" || throw(ArgumentError("Saved rate unit mismatch"))
@@ -110,10 +137,33 @@ function foreach_saved_trajectory(callback,source;species="O2+",progress=nothing
                 code=haskey(file,"$prefix/termination_code") ? file["$prefix/termination_code"] : "unavailable"
                 code in ("unavailable","Success","Terminated","inner","outer","time_limit","zero_rate") ||
                     throw(ArgumentError("Failed/unknown saved termination code: $code"))
+                work=nothing
+                if modern && file["format_version"]==2
+                    file["work_unit"]=="eV" || throw(ArgumentError("Invalid work unit"))
+                    summary=Dict(k=>file["$prefix/work/summary/$k"] for k in keys(file["$prefix/work/summary"]))
+                    all(isfinite,values(summary)) || throw(ArgumentError("Nonfinite work summary"))
+                    steps=Dict{String,Vector{Float64}}();powers=Dict{String,Vector{Float64}}()
+                    file["work_mode"] in ("steps","summary") || throw(ArgumentError("Invalid saved work mode"))
+                    for name in ("total","conv","hall")
+                        key="$prefix/work/dW_$(name)_eV"
+                        if file["work_mode"]=="steps"
+                            a=file[key]
+                            length(a)==length(trajectory.t)-1 && all(isfinite,a) || throw(ArgumentError("Invalid work intervals"))
+                            steps[name]=a
+                        end
+                        key="$prefix/work/power_$(name)_eV_s"
+                        if haskey(file,key)
+                            a=file[key]
+                            length(a)==length(trajectory.t) && all(isfinite,a) || throw(ArgumentError("Invalid power samples"))
+                            powers[name]=a
+                        end
+                    end
+                    work=(;summary,steps,powers,mode=Symbol(file["work_mode"]))
+                end
                 callback((;particle_id=Int(pid),rate_weight_s=rate,trajectory,
                     source_density_weight_m3=haskey(file,"$prefix/source_density_weight_m3") ? file["$prefix/source_density_weight_m3"] : nothing,
                     cell_id=haskey(file,"$prefix/cell_id") ? file["$prefix/cell_id"] : nothing,
-                    termination_code=code,legacy_format=!modern))
+                    termination_code=code,work,legacy_format=!modern))
                 count+=1
             end
         end

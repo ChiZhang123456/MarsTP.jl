@@ -57,3 +57,43 @@ using JLD2, TOML
     @test forward_psd_saved([compressed];kw...).psd==forward_psd(a;kw...,rate_weights_s=[16.]).psd
     println("IO test artifacts: $folder")
 end
+
+@testset "Saved component work" begin
+    folder=mktempdir(;cleanup=false)
+    sp=MarsTP.TP.SpeciesDict["O2+"]; E=1e-5; a=sp.q*E/sp.m
+    t=[0.,.1,.2,.237] # clipped final interval
+    tr=(;t,u=[SA[.5a*s*s,2.,0.,a*s,0.,0.] for s in t])
+    itp=MarsTP.FieldWorkInterpolators(_->SA[E,0.,0.],_->SA[2E,0.,0.],_->SA[-E,0.,0.])
+    w=trajectory_work(tr,itp;power=true)
+    @test sum(w.increments[:,1]) ≈ w.summary.delta_kinetic_eV
+    @test w.summary.positive_conv_eV ≈ 2w.summary.total_eV
+    @test w.summary.negative_hall_eV ≈ -w.summary.total_eV
+    @test w.summary.max_abs_energy_residual_eV < 1e-12
+    @test cumsum(w.increments[:,1]) ≈ Electric_field_work_profile(tr,itp).total_eV[2:end]
+    @test trajectory_work(tr,itp;mode=:summary).summary == w.summary
+    @test trajectory_work(tr,itp;mode=:summary).increments === nothing
+    @test w.powers[:,1] ≈ E*a*t
+    one=(;t=[0.],u=[first(tr.u)])
+    @test size(trajectory_work(one,itp).increments)==(0,3)
+    @test trajectory_work(one,itp).summary.total_eV==0
+    for mode in (:steps,:summary)
+        path=joinpath(folder,"$(mode).jld2")
+        write_trajectory_batch(path,[tr,one];particle_ids=[1,2],rate_weights_s=[3.,0.],
+            work_itp=itp,work_mode=mode,save_power=true,termination_codes=["time_limit","zero_rate"])
+        records=[]
+        foreach_saved_trajectory(x->push!(records,x),path)
+        @test records[1].work.summary["total_eV"] ≈ w.summary.total_eV
+        @test records[1].work.powers["total"] ≈ w.powers[:,1]
+        @test records[2].work.summary["total_eV"]==0
+        if mode==:steps
+            @test records[1].work.steps["hall"] ≈ w.increments[:,3]
+            @test isempty(records[2].work.steps["total"])
+            @test records[1].work.steps["total"][end]/diff(t)[end] ≈ E*a*(t[end]+t[end-1])/2
+        else
+            @test isempty(records[1].work.steps)
+        end
+    end
+    bad=joinpath(folder,"badwork.jld2")
+    @test_throws ArgumentError write_trajectory_batch(bad,[tr];particle_ids=[1],rate_weights_s=[1.],work_mode=:steps)
+    @test !ispath(bad)
+end
