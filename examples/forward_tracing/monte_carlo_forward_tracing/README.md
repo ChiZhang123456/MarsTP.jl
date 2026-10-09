@@ -320,6 +320,17 @@ This monoenergetic beam identity checks the detector estimator. For the prescrib
 
 ## 4. Running and saving
 
+The production driver supports `Config(tracing_backend=:cuda,work_mode=:summary)`.
+Each GPU particle stops at its absorption or escape sphere independently.
+The GPU accumulates total, convection and Hall electric work on every accepted
+Boris segment, including the clipped final step. Device summaries are saved
+directly in the existing JLD2 layout; `particles.csv` adds `work_conv_eV`,
+`work_hall_eV`, and `field_sum_residual_eV` beside the existing total `work_eV`.
+Probe residence and face crossings remain on the CPU using full-cadence
+transferred histories. `:steps` and endpoint power retain host evaluation of
+the additional per-step arrays. See [GPU production usage and validation](../../gpu/README.md).
+The default `tracing_backend=:cpu` retains the original CPU integrator.
+
 Run from the repository root using the Julia project environment. Sampling and tracing require `data/mars_fields_spherical_from_dat.vts`.
 
 ```julia

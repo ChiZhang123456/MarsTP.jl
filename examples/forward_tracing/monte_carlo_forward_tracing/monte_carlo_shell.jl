@@ -1,6 +1,8 @@
 module ShellMonteCarlo
 
 using MarsTP, StaticArrays, LinearAlgebra, Random, JLD2, ReadVTK, Dates, SHA, TOML, Printf
+import KernelAbstractions as KA
+import CUDA
 const TP = MarsTP.TP
 const Vec = SVector{3,Float64}
 const Row = SVector{7,Float64}
@@ -22,6 +24,73 @@ Base.@kwdef struct Config
     compress_trajectories::Bool = false
     work_mode::Symbol = :steps
     save_power::Bool = false
+    tracing_backend::Symbol = :cpu # :cpu, :cuda, or :kernel_cpu (validation)
+end
+
+function _zero_result(p,work_itp)
+    tr=(;t=[0.],u=[SVector{6,Float64}(p.x...,p.v...)])
+    w=trajectory_work(tr,work_itp;species="O2+",mode=:summary).summary
+    return (;history=[Row(0.,p.x...,p.v...)],residence=Vector{Float64}[],events=Vector{Float64}[],
+        status="zero_rate",time=0.,x=p.x,v=p.v,work=0.,dK=0.,residual=0.,maxgyro=0.,work_summary=w)
+end
+
+# Use every accepted GPU step for the existing piecewise-linear detector model.
+# Field interpolation and work accumulation stay on the device; detector
+# crossings, residence, and serialization are computed on the host.
+function _detector_records(tr,c)
+    residence=Vector{Float64}[];events=Vector{Float64}[]
+    lo,hi=c.detector.-c.side/2,c.detector.+c.side/2
+    for j in 2:length(tr.t)
+        a,b=tr.u[j-1],tr.u[j];ta,tb=tr.t[j-1],tr.t[j]
+        xa,xb=Vec(a[1:3]),Vec(b[1:3]);va,vb=Vec(a[4:6]),Vec(b[4:6])
+        hit=cube_segment(xa,xb,lo,hi)
+        hit===nothing && continue
+        s0,s1,entry,exit=hit
+        x0,x1=xa+s0*(xb-xa),xa+s1*(xb-xa)
+        v0,v1=va+s0*(vb-va),va+s1*(vb-va)
+        t0,t1=ta+s0*(tb-ta),ta+s1*(tb-ta)
+        push!(residence,[t0,t1,x0...,x1...,v0...,v1...])
+        entry!=0 && s0>=0 && push!(events,[t0,entry,1,x0...,v0...])
+        exit!=0 && s1>0 && push!(events,[t1,exit,-1,x1...,v1...])
+    end
+    return residence,events
+end
+
+function trace_batch(particles,fields,param,c,work_itp)
+    results=Vector{Any}(undef,length(particles))
+    if c.tracing_backend==:cpu
+        Threads.@threads for q in eachindex(particles)
+            p=particles[q]
+            if p.W>0
+                r=trace_particle(p.x,p.v,param,c)
+                tr=(;t=[a[1] for a in r.history],u=[a[2:7] for a in r.history])
+                w=trajectory_work(tr,work_itp;species="O2+",mode=:summary).summary
+                results[q]=merge(r,(;work_summary=w))
+            else
+                results[q]=_zero_result(p,work_itp)
+            end
+        end
+    else
+        backend=c.tracing_backend==:cuda ? CUDA.CUDABackend() :
+            c.tracing_backend==:kernel_cpu ? KA.CPU() : error("Unknown tracing backend")
+        active=findall(p->p.W>0,particles)
+        cfg=ForwardTraceConfig(species="O2+",solver=:boris,dt=c.dt,tspan=(0.,c.tmax))
+        sols=trace_forward_bounded([SVector{6,Float64}(particles[q].x...,particles[q].v...) for q in active];
+            config=cfg,fields,backend,inner_radius_m=Rm+c.absorption_altitude_km*1e3,
+            outer_radius_m=Router,save_every=1,work_itp)
+        for (q,tr) in zip(active,sols)
+            residence,events=_detector_records(tr,c)
+            w=tr.work;laststate=last(tr.u)
+            results[q]=(;history=[Row(t,u...) for (t,u) in zip(tr.t,tr.u)],residence,events,
+                status=String(tr.status),time=last(tr.t),x=Vec(laststate[1:3]),v=Vec(laststate[4:6]),
+                work=w.total_eV,dK=w.delta_kinetic_eV,residual=w.energy_residual_eV,
+                maxgyro=tr.maxgyro,work_summary=w)
+        end
+        for q in eachindex(particles)
+            particles[q].W>0 || (results[q]=_zero_result(particles[q],work_itp))
+        end
+    end
+    return results
 end
 
 # log P(Z>a), stable even for strongly inward drift. erfc is in Julia's libm.
@@ -261,6 +330,9 @@ end
 function run_monte_carlo(out,c=Config())
     c.dt>0 && c.tmax>0 && c.per_cell>0 && c.cell_stride>0 || error("Invalid configuration")
     0 <= c.absorption_altitude_km < c.altitude_km || error("Absorption altitude must be below source altitude")
+    c.batch_size>0 || error("batch_size must be positive")
+    c.tracing_backend in (:cpu,:cuda,:kernel_cpu) || error("Unknown tracing backend")
+    c.tracing_backend!=:cuda || CUDA.functional() || error("CUDA backend requested but unavailable")
     isapprox(c.tmax/c.dt,round(c.tmax/c.dt);atol=1e-8) || error("tmax must be a multiple of dt")
     ispath(out) && error("Output exists; choose a new run directory: $out")
     mkpath(out)
@@ -273,7 +345,7 @@ function run_monte_carlo(out,c=Config())
         f=load_mhd_fields(fields.path;electric_field=which)
         TP.build_interpolator(TP.StructuredGrid,f.E,fields.r,fields.theta,fields.phi)
     end
-    work_itp=MarsTP.FieldWorkInterpolators(x->param[3](x,0.),component(:conv),component(:hall))
+    work_itp=MarsTP.FieldWorkInterpolators(component(:total),component(:conv),component(:hall))
     particles,cells=release_particles(fields,source,c)
     if c.flux_model!="n_bulk_speed_maxwellian"
         all(p->p.W==0 || dot(p.v,p.x)>0,particles) || error("Positive-rate non-outward release")
@@ -307,6 +379,9 @@ function run_monte_carlo(out,c=Config())
         "steady_state_note"=>"weights are injection rates; residence gives contribution up to max flight age, no extra division by tmax",
         "trajectory_columns"=>["time_s","x_m","y_m","z_m","vx_ms","vy_ms","vz_ms"])
     meta["work_mode"]=String(c.work_mode)
+    meta["tracing_backend"]=String(c.tracing_backend)
+    meta["work_accumulation"]=c.tracing_backend==:cpu ? "host" : "device, every accepted Boris segment"
+    meta["detector_processing"]="host, full integration cadence"
     meta["work_method"]="midpoint q E dot v dt; full integration cadence"
     meta["save_power"]=c.save_power
     meta["batch_size"]=c.batch_size
@@ -339,6 +414,7 @@ function run_monte_carlo(out,c=Config())
     cp(@__FILE__,joinpath(out,"monte_carlo_shell.snapshot.jl"))
     cp(MarsTP.project_path("src","analysis","electric_field_work.jl"),joinpath(out,"electric_field_work.snapshot.jl"))
     cp(MarsTP.project_path("src","tracing","trajectory_io.jl"),joinpath(out,"trajectory_io.snapshot.jl"))
+    cp(MarsTP.project_path("src","tracing","forward_bounded.jl"),joinpath(out,"forward_bounded.snapshot.jl"))
     if rate_mode
         cp(MarsTP.project_path("src","tracing","monte_carlo_weight.jl"),joinpath(out,"monte_carlo_weight.snapshot.jl"))
         cp(MarsTP.project_path("examples","forward_tracing","monte_carlo_forward_tracing","README.md"),joinpath(out,"detector_3d_psd.snapshot.md"))
@@ -355,20 +431,14 @@ function run_monte_carlo(out,c=Config())
     resio=open(joinpath(out,"probe_residence.csv"),"w")
     eventio=open(joinpath(out,"probe_crossings.csv"),"w")
     weight_name=rate_mode ? "rate_weight_s1" : "weight_s1"
-    println(summary,"particle_id,cell_id,$weight_name,source_flux_m2_s,source_area_m2,x0_m,y0_m,z0_m,vx0_ms,vy0_ms,vz0_ms,status,end_time_s,xend_m,yend_m,zend_m,vxend_ms,vyend_ms,vzend_ms,work_eV,deltaK_eV,residual_eV,max_gyro_angle_rad,probe_residence_s,log_importance,source_density_weight_m3")
+    println(summary,"particle_id,cell_id,$weight_name,source_flux_m2_s,source_area_m2,x0_m,y0_m,z0_m,vx0_ms,vy0_ms,vz0_ms,status,end_time_s,xend_m,yend_m,zend_m,vxend_ms,vyend_ms,vzend_ms,work_eV,deltaK_eV,residual_eV,max_gyro_angle_rad,probe_residence_s,log_importance,source_density_weight_m3,work_conv_eV,work_hall_eV,field_sum_residual_eV")
     println(resio,"particle_id,$weight_name,t0_s,t1_s,x0_m,y0_m,z0_m,x1_m,y1_m,z1_m,vx0_ms,vy0_ms,vz0_ms,vx1_ms,vy1_ms,vz1_ms")
     println(eventio,"particle_id,$weight_name,face_flux_m2_s,time_s,face,direction,x_m,y_m,z_m,vx_ms,vy_ms,vz_ms")
     start=time();counts=Dict("inner"=>0,"outer"=>0,"time_limit"=>0,"zero_rate"=>0)
     try
         for bstart in 1:c.batch_size:length(particles)
             indices=bstart:min(bstart+c.batch_size-1,length(particles))
-            results=Vector{Any}(undef,length(indices))
-            Threads.@threads for q in eachindex(indices)
-                p=particles[indices[q]]
-                results[q]=p.W>0 ? trace_particle(p.x,p.v,param,c) :
-                    (;history=[Row(0.,p.x...,p.v...)],residence=Vector{Float64}[],events=Vector{Float64}[],
-                    status="zero_rate",time=0.,x=p.x,v=p.v,work=0.,dK=0.,residual=0.,maxgyro=0.)
-            end
+            results=trace_batch(particles[indices],fields,param,c,work_itp)
             batchid=div(bstart-1,c.batch_size)+1
             trajectories=[(;t=[a[1] for a in r.history],u=[a[2:7] for a in r.history]) for r in results]
             write_trajectory_batch(joinpath(out,@sprintf("trajectories_%05d.jld2",batchid)),trajectories;
@@ -376,11 +446,12 @@ function run_monte_carlo(out,c=Config())
                 source_density_weights_m3=[particles[i].density_weight for i in indices],
                 cell_ids=[particles[i].cellid for i in indices],termination_codes=[r.status for r in results],
                 species="O2+",coordinate_system=meta["coordinate_system"],compress=c.compress_trajectories,
-                work_itp,work_mode=c.work_mode,save_power=c.save_power)
+                work_itp,work_mode=c.work_mode,save_power=c.save_power,
+                work_summaries=c.work_mode==:summary && !c.save_power ? [r.work_summary for r in results] : nothing)
             for (q,i) in enumerate(indices)
                 p=particles[i];r=results[q];counts[r.status]+=1
                 dwell=sum((a[2]-a[1] for a in r.residence);init=0.0)
-                println(summary,join((p.id,p.cellid,p.W,p.flux,p.area,p.x...,p.v...,r.status,r.time,r.x...,r.v...,r.work,r.dK,r.residual,r.maxgyro,dwell,p.logw,p.density_weight),','))
+                println(summary,join((p.id,p.cellid,p.W,p.flux,p.area,p.x...,p.v...,r.status,r.time,r.x...,r.v...,r.work,r.dK,r.residual,r.maxgyro,dwell,p.logw,p.density_weight,r.work_summary.conv_eV,r.work_summary.hall_eV,r.work_summary.field_sum_residual_eV),','))
                 for a in r.residence;println(resio,join((p.id,p.W,a...),','));end
                 for a in r.events;println(eventio,join((p.id,p.W,p.W/c.side^2,a...),','));end
             end
@@ -404,12 +475,15 @@ end # module
 
 if abspath(PROGRAM_FILE)==@__FILE__
     using .ShellMonteCarlo
-    out=length(ARGS)>0 ? ARGS[1] : error("Usage: julia --project=. monte_carlo_shell.jl OUTPUT [cell_stride] [tmax] [dt] [per_cell] [flux_model] [compress]")
+    out=length(ARGS)>0 ? ARGS[1] : error("Usage: julia --project=. monte_carlo_shell.jl OUTPUT [cell_stride] [tmax] [dt] [per_cell] [flux_model] [compress] [backend] [work_mode] [batch_size]")
     stride=length(ARGS)>1 ? parse(Int,ARGS[2]) : 1
     tmax=length(ARGS)>2 ? parse(Float64,ARGS[3]) : 500.0
     dt=length(ARGS)>3 ? parse(Float64,ARGS[4]) : 0.1
     per_cell=length(ARGS)>4 ? parse(Int,ARGS[5]) : 100
     flux_model=length(ARGS)>5 ? ARGS[6] : "n_bulk_speed_maxwellian"
     compress_trajectories=length(ARGS)>6 ? parse(Bool,ARGS[7]) : false
-    ShellMonteCarlo.main(out,ShellMonteCarlo.Config(;cell_stride=stride,tmax,dt,per_cell,flux_model,compress_trajectories,batch_size=1024))
+    tracing_backend=length(ARGS)>7 ? Symbol(ARGS[8]) : :cpu
+    work_mode=length(ARGS)>8 ? Symbol(ARGS[9]) : :steps
+    batch_size=length(ARGS)>9 ? parse(Int,ARGS[10]) : 1024
+    ShellMonteCarlo.main(out,ShellMonteCarlo.Config(;cell_stride=stride,tmax,dt,per_cell,flux_model,compress_trajectories,batch_size,tracing_backend,work_mode))
 end

@@ -96,4 +96,18 @@ end
     bad=joinpath(folder,"badwork.jld2")
     @test_throws ArgumentError write_trajectory_batch(bad,[tr];particle_ids=[1],rate_weights_s=[1.],work_mode=:steps)
     @test !ispath(bad)
+    precomputed=joinpath(folder,"precomputed_work.jld2")
+    write_trajectory_batch(precomputed,[tr];particle_ids=[1],rate_weights_s=[1.],
+        work_mode=:summary,work_summaries=[w.summary])
+    records=[]
+    foreach_saved_trajectory(x->push!(records,x),precomputed)
+    for (key,value) in pairs(w.summary)
+        @test records[1].work.summary[string(key)] ≈ value
+    end
+    @test isempty(records[1].work.steps)
+    @test_throws ArgumentError write_trajectory_batch(bad,[tr];particle_ids=[1],rate_weights_s=[1.],
+        work_mode=:steps,work_summaries=[w.summary])
+    @test_throws ArgumentError write_trajectory_batch(bad,[tr];particle_ids=[1],rate_weights_s=[1.],
+        work_mode=:summary,work_summaries=[merge(w.summary,(;total_eV=NaN))])
+    @test !ispath(bad)
 end

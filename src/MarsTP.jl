@@ -23,7 +23,7 @@ export load_gitm, load_amps, neutral_properties, hot_oxygen_density
 export O2plusSourceRates, load_o2plus_source_rates, assert_same_grid
 export IonosphereSource, load_ionosphere_source, ionosphere_properties, ionosphere_distribution
 export BacktraceConfig, run_backtrace_vdf, velocity_axes
-export ForwardTraceConfig, trace_forward
+export ForwardTraceConfig, trace_forward, trace_forward_bounded
 export detector_omni_def
 export forward_psd, ForwardPSDAccumulator, accumulate_forward_psd!, finish_forward_psd
 export write_trajectory_batch, foreach_saved_trajectory, forward_psd_saved
@@ -43,6 +43,7 @@ include("chemistry/reactions.jl")
 include("analysis/detector_omni_def.jl")
 include("tracing/detector_psd_backward.jl")
 include("tracing/forward_tracing.jl")
+include("tracing/forward_bounded.jl")
 include("tracing/monte_carlo_weight.jl")
 include("tracing/detector_psd_forward.jl")
 include("tracing/forward_psd_accumulator.jl")

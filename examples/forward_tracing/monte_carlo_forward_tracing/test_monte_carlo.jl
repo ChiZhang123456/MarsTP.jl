@@ -2,6 +2,42 @@ using Test
 include("monte_carlo_shell.jl")
 using .ShellMonteCarlo, MarsTP, StaticArrays, LinearAlgebra, Random
 const MC=ShellMonteCarlo
+
+@testset "Production batch GPU adapter, work, and detector records" begin
+    r=collect(range(Rinner,Router;length=8));th=collect(range(0.,pi;length=9));ph=collect(range(0.,2pi;length=17))
+    E=zeros(3,length(r),length(th),length(ph));E[1,:,:,:].=1e-5
+    MarsTP._rotate_vectors_to_spherical!(E,r,th,ph)
+    fields=MHDFields(r,th,ph,E,zero(E),:total,"uniform_Ex")
+    interp(A)=MarsTP.TP.build_interpolator(MarsTP.TP.StructuredGrid,A,r,th,ph)
+    itp=MarsTP.FieldWorkInterpolators(interp(E),interp(2E),interp(-E))
+    param=MarsTP.mhd_param(fields;species="O2+")
+    starts=[(SA[Rinner+1000.,0.,0.],SA[-1000.,0.,0.]),
+            (SA[Router-150.,0.,0.],SA[1000.,0.,0.]),
+            (SA[Rinner+2000.,0.,0.],SA[0.,0.,0.]),
+            (SA[Rm+500e3,0.,0.],SA[100.,0.,0.])]
+    particles=[(;x,v,W=i==4 ? 0. : 1.) for (i,(x,v)) in enumerate(starts)]
+    options=(;dt=.3,tmax=1.2,detector=SA[Rinner+500.,0.,0.],side=200.)
+    cpu=MC.trace_batch(particles,fields,param,MC.Config(;options...),itp)
+    backends=get(ENV,"MARSTP_TEST_CUDA","false")=="true" ? (:kernel_cpu,:cuda) : (:kernel_cpu,)
+    for backend in backends
+        gpu=MC.trace_batch(particles,fields,param,MC.Config(;options...,tracing_backend=backend),itp)
+        @test getproperty.(gpu,:status)==["inner","outer","time_limit","zero_rate"]
+        for (a,b) in zip(cpu,gpu)
+            @test a.time ≈ b.time atol=1e-9
+            @test a.x ≈ b.x atol=1e-6
+            @test a.v ≈ b.v atol=1e-7
+            @test a.maxgyro ≈ b.maxgyro
+            for key in keys(a.work_summary)
+                @test getproperty(a.work_summary,key) ≈ getproperty(b.work_summary,key) atol=1e-8
+            end
+            @test length(a.residence)==length(b.residence)
+            @test length(a.events)==length(b.events)
+            for (x,y) in zip(a.residence,b.residence);@test x ≈ y atol=1e-6;end
+            for (x,y) in zip(a.events,b.events);@test x ≈ y atol=1e-6;end
+        end
+        @test length(gpu[1].events)==2
+    end
+end
 @testset "Bulk-speed shell source without sign selection" begin
     radius=Rm+500e3
     fields=MHDFields([radius,Router],[0.,pi/2,pi],[0.,pi,2pi],zeros(3,2,3,3),zeros(3,2,3,3),:total,"")

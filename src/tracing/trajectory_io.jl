@@ -2,7 +2,8 @@
     write_trajectory_batch(path, trajectories; particle_ids, rate_weights_s,
         source_density_weights_m3=nothing, cell_ids=nothing,
         termination_codes=nothing, species="O2+", coordinate_system="unspecified",
-        compress=false, work_itp=nothing, work_mode=:none, save_power=false)
+        compress=false, work_itp=nothing, work_mode=:none, save_power=false,
+        work_summaries=nothing)
 
 Write one bounded batch of synchronized Cartesian trajectories to JLD2.
 Never overwrites an existing path. Each p<ID>/state is Float64 7×N with rows
@@ -16,14 +17,26 @@ Steps stores p<ID>/work/dW_{total,conv,hall}_eV with N-1 intervals; summary
 stores signed totals, positive/negative sums, endpoint kinetic energy and closure.
 Optional endpoint powers use N samples. Supply full cadence trajectories: this
 writer cannot recover work on omitted integration steps. :none preserves v1.
+`work_summaries` accepts device-computed summaries in :summary mode without
+power output. They must represent all accepted integration steps, including
+the partial terminal step; this bypasses host work recomputation.
 """
 function write_trajectory_batch(path,trajectories;particle_ids,rate_weights_s,
         source_density_weights_m3=nothing,cell_ids=nothing,termination_codes=nothing,
         species="O2+",coordinate_system="unspecified",compress=false,
-        work_itp=nothing,work_mode=:none,save_power=false)
+        work_itp=nothing,work_mode=:none,save_power=false,work_summaries=nothing)
     work_mode in (:none,:summary,:steps) || throw(ArgumentError("Invalid work mode"))
     work_mode==:none && save_power && throw(ArgumentError("Power requires work mode"))
-    work_mode!=:none && work_itp===nothing && throw(ArgumentError("Work interpolators required"))
+    work_summaries===nothing || (work_mode==:summary && !save_power && length(work_summaries)==length(trajectories)) ||
+        throw(ArgumentError("Precomputed work requires summary mode, no power, and matching batch length"))
+    work_mode!=:none && work_itp===nothing && work_summaries===nothing && throw(ArgumentError("Work interpolators required"))
+    if work_summaries!==nothing
+        required=(:total_eV,:conv_eV,:hall_eV,:positive_total_eV,:positive_conv_eV,:positive_hall_eV,
+            :negative_total_eV,:negative_conv_eV,:negative_hall_eV,:initial_kinetic_eV,:final_kinetic_eV,
+            :delta_kinetic_eV,:energy_residual_eV,:max_abs_energy_residual_eV,:field_sum_residual_eV)
+        all(w->all(k->hasproperty(w,k) && isfinite(getproperty(w,k)),required),work_summaries) ||
+            throw(ArgumentError("Invalid precomputed work summary"))
+    end
     ispath(path) && throw(ArgumentError("Refusing to overwrite $path"))
     haskey(TP.SpeciesDict,species) || throw(ArgumentError("Unknown species"))
     n=length(trajectories)
@@ -47,7 +60,8 @@ function write_trajectory_batch(path,trajectories;particle_ids,rate_weights_s,
         file["format_version"]=work_mode==:none ? 1 : 2
         if work_mode!=:none
             file["work_mode"]=String(work_mode)
-            file["work_method"]="midpoint q E dot v dt on supplied intervals"
+            file["work_method"]=work_summaries===nothing ? "midpoint q E dot v dt on supplied intervals" :
+                "midpoint q E dot v dt on all accepted integration intervals (precomputed)"
             file["work_unit"]="eV"
             file["power_unit"]="eV s^-1"
             file["work_components"]=["total","conv","hall"]
@@ -70,7 +84,8 @@ function write_trajectory_batch(path,trajectories;particle_ids,rate_weights_s,
             code=termination_codes===nothing ? (hasproperty(traj,:retcode) ? string(traj.retcode) : "unavailable") : string(termination_codes[i])
             file["$prefix/termination_code"]=code
             if work_mode!=:none
-                w=trajectory_work(traj,work_itp;species,mode=work_mode,power=save_power)
+                w=work_summaries===nothing ? trajectory_work(traj,work_itp;species,mode=work_mode,power=save_power) :
+                    (;summary=work_summaries[i],increments=nothing,powers=nothing)
                 for (key,value) in pairs(w.summary)
                     file["$prefix/work/summary/$key"]=value
                 end

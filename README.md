@@ -29,6 +29,11 @@ at `data/mars_fields_spherical_from_dat.vts` before running tracing.
 Fixed-step forward tracing can use NVIDIA GPUs through TestParticle 0.24:
 see [CPU/GPU example, benchmark and limitations](examples/gpu/README.md).
 Pass `backend=CUDA.CUDABackend()` and `solver=:boris` to `trace_forward`.
+Use `trace_forward_bounded` for independent particle stopping at the 200 km
+absorption and outer escape spheres, with termination states and times.
+It can accumulate total, convection and Hall electric work on the GPU with
+`work_itp`. The production shell driver supports `tracing_backend=:cuda` and
+direct device-summary output with `work_mode=:summary`.
 The source-accumulating backward VDF remains on CPU.
 
 Monte Carlo Maxwellian initial states and physical weights are available via

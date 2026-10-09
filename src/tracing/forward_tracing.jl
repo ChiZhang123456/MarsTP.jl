@@ -17,6 +17,7 @@ The return value preserves MarsTP's vector of single-member ensembles.
 
 The backend integrates to the time limit without boundary callbacks. Choose
 an in-domain interval; nonfinite saved states raise an error, never extrapolate.
+Use `trace_forward_bounded` for per-particle spherical absorption and escape.
 CPU backtracing/source accumulation is separate from this forward API.
 """
 function trace_forward(initial_states; config::ForwardTraceConfig = ForwardTraceConfig(),

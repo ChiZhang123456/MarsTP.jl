@@ -47,14 +47,111 @@ returned by `trace_forward`. TestParticle itself changed its single-particle
 older examples that directly use TestParticle must read `sol.t` and `sol.u`
 instead of `only(sol.u).t` and `only(sol.u).u`.
 
-GPU currently covers fixed-step forward tracing. Adaptive tracing and the
-source-accumulating backward VDF remain on CPU. The GPU ensemble kernel has no
-per-particle boundary callback. Use a short interval known to stay inside the
-field domain. Nonfinite states or solver failures raise an error in MarsTP;
-there is no field extrapolation or missing-value replacement. Production
-escape/impact statistics need a GPU event/termination implementation before
-using this path for long traces. A speed ratio from this short example does
-not establish acceleration of the complete backward VDF pipeline.
+GPU covers fixed-step forward tracing. Adaptive tracing and the
+source-accumulating backward VDF remain on CPU. `trace_forward` uses the
+upstream time-limited kernel; `trace_forward_bounded` adds a MarsTP kernel that
+stops each particle independently at spherical absorption/escape boundaries.
+Nonfinite states remain failures, with no field extrapolation or replacement.
+The short benchmark below measures `trace_forward`; it does not measure the
+new boundary kernel or the complete Monte Carlo or backward VDF pipeline.
+
+## Per-particle absorption and escape
+
+```julia
+using MarsTP, CUDA
+cfg = ForwardTraceConfig(species="O2+",solver=:boris,dt=.1,tspan=(0.,500.))
+trajectories = trace_forward_bounded(initial_states;config=cfg,
+    backend=CUDA.CUDABackend(),inner_radius_m=Rm+200e3,
+    outer_radius_m=Router,save_every=10)
+statuses = getproperty.(trajectories,:status)
+```
+
+Each returned trajectory has `t`, synchronized Cartesian `u` (m, m/s),
+`species`, `retcode`, and `status`: `:inner`, `:outer`, `:time_limit`, or
+`:numerical_failure`. Absorption is at 200 km altitude by default; escape is
+at 4 Mars radii. Source sampling at 500 km and n*norm(U) source weights are
+unchanged and are supplied separately. Field coverage must include both spheres.
+
+Every Boris drift is checked for its first sphere intersection, even when
+both endpoints lie outside the inner sphere. The final state lies at that
+intersection and the time includes its fractional step. Endpoint velocity
+uses the same clipped-step synchronization as the CPU shell tracer. Check
+step-size convergence for curved trajectories and termination diagnostics.
+Boundary checks precede field evaluation at a trial endpoint, preventing
+out-of-domain interpolation. A one-micrometre query guard places boundary
+field evaluation on the covered side; the saved endpoint is unshifted.
+
+`save_every=0` saves only initial and final states; a positive integer saves
+every N steps plus the terminal state. Run bounded particle batches to control
+GPU memory. Detector residence and postprocessed work diagnostics need sufficiently
+dense histories. Pass `work_itp` to accumulate all integration-step work on the
+device, independently of output thinning; the returned `work` includes signed
+total, convection and Hall work in eV, their positive/negative contributions,
+kinetic-energy change and closure residuals. General callbacks and on-device
+detector accumulators are not implemented.
+
+## Production Monte Carlo GPU path
+
+The shell driver now accepts `tracing_backend=:cuda`. It uses the GPU boundary
+kernel and device work accumulation, retains n*norm(U) injection at 500 km and
+absorption at 200 km, and processes detector residence/crossings on the CPU
+from every accepted integration step. All physical source weights are unchanged.
+
+```julia
+include("examples/forward_tracing/monte_carlo_forward_tracing/monte_carlo_shell.jl")
+ShellMonteCarlo.run_monte_carlo("outputs/my_gpu_run",
+    ShellMonteCarlo.Config(tracing_backend=:cuda,work_mode=:summary,
+        batch_size=256,dt=.1,tmax=500.,per_cell=100))
+```
+
+Use `work_mode=:summary` with `save_power=false` to write the device-computed
+work summaries directly to the existing JLD2 format. `:steps` or endpoint
+power additionally evaluates diagnostics on the host to retain the existing
+per-step/power arrays. `particles.csv` preserves `work_eV` (total), and adds
+`work_conv_eV`, `work_hall_eV`, and `field_sum_residual_eV`. Existing kinetic
+closure and termination columns are retained. Metadata records the backend;
+the numerical kernel is copied into each run's source snapshots.
+
+The GPU accelerates integration and work accumulation. Source sampling,
+detector analysis, field uploads, trajectory transfers, compression and disk
+output still contribute to end-to-end runtime; the earlier short tracing
+speed ratios do not describe this full production path. Full histories are
+kept for detector estimates, so choose batches according to steps and GPU RAM
+(roughly 56 bytes per particle per saved state, before fields and diagnostics).
+
+Small end-to-end actual-MHD validation (60 particles per backend):
+`julia --threads=4 --project=. examples/gpu/production_smoke.jl`.
+
+Small actual-field CPU/GPU comparison:
+`julia --threads=4 --project=. examples/gpu/bounded_forward.jl`.
+To include device checks in the package tests, set `MARSTP_TEST_CUDA=true`.
+
+Initial boundary validation on 2026-10-08 (Julia 1.12.6, TestParticle 0.24.1, RTX 4070 SUPER):
+550 package assertions passed, including 47 CPU boundary assertions; the same
+47 device assertions passed on CUDA. Cases cover independent stopping times,
+initial boundary positions, a drift through the entire inner sphere, invalid
+fields, synchronized magnetic motion, and magnetic-event timestep convergence.
+The actual-MHD example passed 11 CPU/GPU comparison assertions: absorption at
+200 km at 0.0099995681 s, escape at 4 Rm at 0.0099999996 s, and a third particle
+reaching 10 s. These are small validation cases, not a full production ensemble.
+
+After production/work integration, 674 package assertions passed and the
+152 boundary/work assertions passed on CUDA. The shell suite passed 435
+assertions with both CPU-kernel and CUDA adapter comparisons against the
+original CPU tracer. Four Python analysis tests passed. The 60-particle,
+0.2 s actual-MHD end-to-end run passed 1274 output assertions (plus two
+record-count checks), including source weights, CSV work columns and JLD2
+summaries. Maximum CPU/GPU discrepancies were 1.60e-14 eV for the three work
+totals, 2.33e-10 m for position, and 4.07e-12 m/s for velocity. Compilation
+is included in the smoke-run elapsed times; they are not performance measurements.
+
+The same end-to-end comparison extended to 30 s also passed all 1274 output
+assertions: both backends absorbed 14 particles at 200 km and kept 46 until the
+time limit. Maximum discrepancies were 2.73e-12 eV for work, 1.92e-9 m for
+position and 5.03e-10 m/s for velocity. Escape and partial terminal-step work
+are additionally covered by the analytic production-adapter tests. Run this
+longer small check with `examples/gpu/production_smoke.jl 30`; it remains a
+validation sample, not a converged production population.
 
 The pre-update Project.toml and Manifest.toml were preserved in
 `outputs/gpu_update_20261008_1349/`.
