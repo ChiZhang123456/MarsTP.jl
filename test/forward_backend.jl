@@ -24,9 +24,18 @@ using KernelAbstractions, LinearAlgebra
     end
     @test_throws ArgumentError trace_forward(states;fields,backend=KernelAbstractions.CPU())
     @test_throws ArgumentError trace_forward(states;fields,config=ForwardTraceConfig(solver=:other))
-    @test_throws ArgumentError trace_forward([SA[0.,0.,0.,1.,0.,0.]];fields,config=cfg)
+    outside = only(only(trace_forward([SA[0.,0.,0.,1.,0.,0.]];fields,config=cfg)).u)
+    @test outside.retcode == MarsTP.TP.ReturnCode.Terminated
+    @test outside.t == [0.]
     @test isempty(trace_forward([];fields,config=cfg))
-    @test_throws ErrorException trace_forward([SA[Router-1,0.,0.,1e5,0.,0.]];fields,config=cfg,backend=KernelAbstractions.CPU())
+    for backend in (KernelAbstractions.CPU(),)
+        exit = only(only(trace_forward([SA[Router-1,0.,0.,1e5,0.,0.]];
+            fields,config=cfg,backend)).u)
+        @test exit.retcode == MarsTP.TP.ReturnCode.Terminated
+        @test all(u -> all(isfinite,u), exit.u)
+        @test norm(last(exit.u)[1:3]) <= Router
+        @test last(exit.t) < cfg.tspan[2]
+    end
 end
 
 @testset "0.24 backtrace accepts boundary before invalid endpoint fields" begin

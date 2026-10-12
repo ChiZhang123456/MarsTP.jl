@@ -9,7 +9,7 @@ using KernelAbstractions: @kernel, @index
     v = SVector(initial[i,4], initial[i,5], initial[i,6])
     t = t0
     count = 1
-    flag = 1
+    flag = norm(x) < inner ? 2 : norm(x) > outer ? 4 : 1
     totals = SVector(0.,0.,0.)
     positive = totals
     negative = totals
@@ -23,8 +23,8 @@ using KernelAbstractions: @kernel, @index
     end
     query0 = norm(x) >= outer ? x*((outer-1e-6)/norm(x)) :
              norm(x) <= inner ? x*((inner+1e-6)/norm(x)) : x
-    half = TP.update_velocity_half(v,query0,dt,t,param,TP.Boris())
-    for step in 1:nsteps
+    half = flag == 1 ? TP.update_velocity_half(v,query0,dt,t,param,TP.Boris()) : v
+    for step in 1:(flag == 1 ? nsteps : 0)
         query0 = norm(x) >= outer ? x*((outer-1e-6)/norm(x)) :
                  norm(x) <= inner ? x*((inner+1e-6)/norm(x)) : x
         maxgyro = max(maxgyro,abs(param[1])*norm(param[4](query0,t))*dt)
@@ -100,8 +100,10 @@ synchronized using the clipped fraction of the step, as in the CPU shell model.
 
 Returns a vector of trajectories with `t`, `u`, `status` (:inner, :outer,
 :time_limit, :numerical_failure), `retcode`, and `species`. Every successful
-trajectory includes its exact termination endpoint. `save_every=0` saves only
-initial/final states; otherwise save every N integration steps. Use bounded
+trajectory includes its exact termination endpoint.
+Finite initial states already inside the absorption sphere or beyond the escape
+sphere stop immediately with :inner or :outer, without evaluating fields.
+`save_every=0` saves only initial/final states; otherwise save every N integration steps. Use bounded
 particle batches for long histories. Sparse histories cannot recover detector
 residence or postprocessed work on omitted steps. The interval must contain an
 integer number of steps. This implements spherical boundaries, not arbitrary
@@ -131,8 +133,6 @@ function trace_forward_bounded(initial_states;
     states = [SVector{6,Float64}(s) for s in initial_states]
     isempty(states) && return []
     all(s->all(isfinite,s),states) || throw(ArgumentError("Nonfinite initial state"))
-    all(s->inner_radius_m <= norm(s[1:3]) <= outer_radius_m,states) ||
-        throw(ArgumentError("Initial position outside boundaries"))
     fields = fields === nothing ? load_mhd_fields(config.mhd_file;electric_field=:total) : fields
     # Log-spaced axes can differ from the defining radius by a few ulps.
     # Allow 16 ulps for exp(log(radius)) reconstruction. Event/start queries

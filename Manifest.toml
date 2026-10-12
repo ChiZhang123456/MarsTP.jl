@@ -2,7 +2,7 @@
 
 julia_version = "1.12.6"
 manifest_format = "2.0"
-project_hash = "bb07f028978e03923cd67c1daefbd674b4ef29b4"
+project_hash = "fac6db5a297481bcc5abde80b3908e7619c73d50"
 
 [[deps.ADTypes]]
 deps = ["PrecompileTools"]
@@ -212,7 +212,10 @@ version = "1.1.0"
 
 [[deps.BorisPushers]]
 deps = ["Adapt", "ChunkSplitters", "KernelAbstractions", "LinearAlgebra", "MuladdMacro", "OrdinaryDiffEqCore", "Reexport", "SciMLBase", "StaticArrays"]
-git-tree-sha1 = "6b44b2ef39a3c4501a1bae3a6966634a4475bb48"
+git-tree-sha1 = "654e0ee1d1639144cb17138a84a8c7a1878f778d"
+repo-rev = "7da93a7612d3c36a6f39377cb87ee15bd0d4b5a5"
+repo-subdir = "lib/BorisPushers"
+repo-url = "https://github.com/henry2004y/TestParticle.jl.git"
 uuid = "1e8b2ed2-ea1c-4b6e-b3f5-67c29d6bd197"
 version = "0.1.1"
 
@@ -303,7 +306,7 @@ uuid = "1af6417a-86b4-443c-805f-a4643ffb695f"
 version = "2.1.1"
 
 [[deps.CUDA_Runtime_jll]]
-deps = ["Artifacts", "CUDA_Compiler_jll", "CUDA_Driver_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "TOML"]
+deps = ["Artifacts", "CUDA_Compiler_jll", "CUDA_Driver_jll", "JLLWrappers", "LazyArtifacts", "Libdl", "MSVCRuntime_jll", "TOML"]
 git-tree-sha1 = "73ee54b64592c4157e7240e237a13c65049048c3"
 uuid = "76a88914-d11a-5bdc-97e0-2f5a05c973a2"
 version = "0.25.0+1"
@@ -1488,6 +1491,12 @@ git-tree-sha1 = "675df097f8eeb28998b2cfe3b25655af73d5f7df"
 uuid = "f1f71cc9-e9ae-5b93-9b94-4fe0e1ad3748"
 version = "5.5.6+0"
 
+[[deps.MSVCRuntime_jll]]
+deps = ["Artifacts", "JLLWrappers", "Libdl"]
+git-tree-sha1 = "9670d7b2dbc92652a250e88eaa80861892d453e2"
+uuid = "ce32ce21-2cee-52aa-a084-5c6dad4fa7db"
+version = "14.51.36247+0"
+
 [[deps.MacroTools]]
 git-tree-sha1 = "1e0228a030642014fe5cfe68c2c0a818f9e3f522"
 uuid = "1914dd2f-81c6-5fcd-8719-6d5c9610ff09"
@@ -1516,7 +1525,7 @@ uuid = "d6f4376e-aef5-505a-96c1-9c027394607a"
 version = "1.11.0"
 
 [[deps.MarsTP]]
-deps = ["CUDA", "CairoMakie", "FastInterpolations", "JLD2", "KernelAbstractions", "LinearAlgebra", "MAT", "Random", "ReadVTK", "StaticArrays", "TOML", "TestParticle", "VelocityDistributionFunctions"]
+deps = ["BorisPushers", "CUDA", "CairoMakie", "FastInterpolations", "JLD2", "KernelAbstractions", "LinearAlgebra", "MAT", "Random", "ReadVTK", "StaticArrays", "TOML", "TestParticle", "VelocityDistributionFunctions"]
 path = "."
 uuid = "61c3d403-8f34-4db7-a916-f2647c7b6c22"
 version = "0.1.0"
@@ -2425,9 +2434,9 @@ version = "1.17.1"
 
 [[deps.TestParticle]]
 deps = ["Adapt", "BorisPushers", "ChunkSplitters", "DiffResults", "Distributed", "FastInterpolations", "ForwardDiff", "KernelAbstractions", "LinearAlgebra", "MuladdMacro", "PhysicalConstants", "PrecompileTools", "Random", "SciMLBase", "StaticArrays", "Tensors", "Unitful"]
-git-tree-sha1 = "ae8680dc1d754d421b0468e21a4f803fa4f7feb4"
+git-tree-sha1 = "14696391e3f9f8a883de65b5c0dcfc8a20b8192b"
 uuid = "953b605b-f162-4481-8f7f-a191c2bb40e3"
-version = "0.24.1"
+version = "0.24.2"
 
     [deps.TestParticle.extensions]
     TestParticleMeshesExt = "Meshes"

@@ -22,6 +22,27 @@ function _mhd_axes(nr, ntheta, nphi)
     )
 end
 
+function _mhd_axes(vtk, nr, ntheta, nphi)
+    grid = ReadVTK.LightXML.root(vtk.xml_file)[vtk.file_type][1]
+    isempty(grid["FieldData"]) && return _mhd_axes(nr,ntheta,nphi)
+    metadata = get_field_data(vtk)
+    names = ("r_axis [m]", "theta_axis [rad]", "phi_axis [rad]")
+    present = map(name -> name in keys(metadata),names)
+    any(present) || return _mhd_axes(nr,ntheta,nphi)
+    all(present) || throw(ArgumentError("Incomplete MHD grid-axis metadata"))
+    axes = map(name -> Float64.(vec(get_data(metadata[name]))),names)
+    for (axis,n) in zip(axes,(nr,ntheta,nphi))
+        length(axis) == n && all(isfinite,axis) && all(>(0),diff(axis)) ||
+            throw(ArgumentError("Invalid MHD grid-axis metadata"))
+    end
+    first(axes[1]) > 0 || throw(ArgumentError("MHD radii must be positive"))
+    if "Planet_radius [m]" in keys(metadata)
+        radius = only(get_data(metadata["Planet_radius [m]"]))
+        isapprox(radius,Rm;rtol=1e-12) || throw(ArgumentError("MHD planet radius does not match MarsTP Rm"))
+    end
+    return axes
+end
+
 function _point_vector(point_data, names; scale = 1.0)
     keys_available = keys(point_data)
     for name in names
@@ -64,7 +85,7 @@ function load_mhd_fields(
     point_data = get_point_data(vtk)
     dims = ReadVTK.get_wholeextent(vtk.xml_file)[1]
     nr, ntheta, nphi = dims
-    r, theta, phi = _mhd_axes(nr, ntheta, nphi)
+    r, theta, phi = _mhd_axes(vtk, nr, ntheta, nphi)
 
     B_raw = if "B_Field [T]" in keys(point_data)
         get_data(point_data["B_Field [T]"])
@@ -100,7 +121,7 @@ function load_mhd_moments(path = data_path("mars_fields_spherical_from_dat.vts")
     vtk = VTKFile(resolved)
     point_data = get_point_data(vtk)
     nr, ntheta, nphi = ReadVTK.get_wholeextent(vtk.xml_file)[1]
-    r, theta, phi = _mhd_axes(nr, ntheta, nphi)
+    r, theta, phi = _mhd_axes(vtk, nr, ntheta, nphi)
 
     moments = (
         Hplus = SpeciesMoments(
@@ -160,7 +181,7 @@ function load_ionosphere_source(path=data_path("mars_fields_spherical_from_dat.v
     vtk = VTKFile(resolve_project_path(path))
     pd = get_point_data(vtk)
     nr, nt, np = ReadVTK.get_wholeextent(vtk.xml_file)[1]
-    r, theta, phi = _mhd_axes(nr, nt, np)
+    r, theta, phi = _mhd_axes(vtk, nr, nt, np)
     scalar(A) = TP.build_interpolator(TP.StructuredGrid, A, r, theta, phi)
     n = _read_array(pd, "n_O^2^p [m^-3]", nr, nt, np)
     T = _read_array(pd, "T_O^2^p [K]", nr, nt, np)

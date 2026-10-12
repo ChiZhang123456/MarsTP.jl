@@ -49,11 +49,45 @@ instead of `only(sol.u).t` and `only(sol.u).u`.
 
 GPU covers fixed-step forward tracing. Adaptive tracing and the
 source-accumulating backward VDF remain on CPU. `trace_forward` uses the
-upstream time-limited kernel; `trace_forward_bounded` adds a MarsTP kernel that
+upstream kernel with radial `isoutside` checks on hardware backends; an exit
+returns `ReturnCode.Terminated` at the last accepted in-domain state.
+`trace_forward_bounded` adds a MarsTP kernel that
 stops each particle independently at spherical absorption/escape boundaries.
 Nonfinite states remain failures, with no field extrapolation or replacement.
 The short benchmark below measures `trace_forward`; it does not measure the
 new boundary kernel or the complete Monte Carlo or backward VDF pipeline.
+
+The October 12, 2026 environment uses TestParticle 0.24.2 and BorisPushers
+from TestParticle commit `7da93a7612d3c36a6f39377cb87ee15bd0d4b5a5`.
+The registered BorisPushers 0.1.1 does not include the new device boundary
+checks, so both Project.toml and Manifest.toml record the upstream subdirectory
+source. The keyword for native/kernel tracing is `isoutside(u,p,t)`.
+An interior NaN remains a numerical error. Serial fixed-step and adaptive
+tracing use a discrete callback that rejects an outside trial step and restores
+the last in-domain state and time. Trial-step saves are withdrawn before
+saving the restored endpoint, so NaN endpoint velocities are not returned.
+Serial and device tracing both report `ReturnCode.Terminated` for radial exits.
+Both also stop below the fixed 200 km absorption boundary, even when the
+input mesh extends down to 100 km. Finite initial states below that boundary
+terminate at the initial time without querying fields or aborting other particles.
+Use `trace_forward_bounded` for physical absorption/escape with exact sphere
+intersections rather than the last accepted integration node.
+The bounded API returns `:inner` immediately for such initially absorbed
+particles, preserving their initial state. MHD files containing all three
+`r_axis [m]`, `theta_axis [rad]`, and `phi_axis [rad]` fields use their stored
+grid axes; legacy files without them keep the historical 200 km to 4 Rm grid.
+
+Small actual-field validation (default legacy grid):
+
+```powershell
+julia --threads=4 --project=. examples/gpu/actual_mhd_domain_validation.jl
+```
+
+The script preserves inputs and writes per-particle CSV comparisons, JLD2
+histories and a summary in a new `outputs/actual_mhd_domain_*` directory.
+Pass two VTS paths as positional arguments to validate both the legacy grid
+and a 100 km pe_hall grid. The second input is checked to start at 100 km.
+See [recorded validation](validation_20261012/README.md) for the two-field results.
 
 ## Per-particle absorption and escape
 

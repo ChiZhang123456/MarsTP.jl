@@ -75,6 +75,12 @@ function bounded_checks(backend)
     @test errors[2] < errors[1]
     # Invalid fields remain a numerical failure, never an escape or absorption.
     invalid = MHDFields(r,th,ph,fill(NaN,size(E)),copy(E),:total,"invalid")
+    low = SA[Rm+99e3,0.,0.,-1e5,0.,0.]
+    absorbed = only(trace_forward_bounded([low];config=cfgB,fields=invalid,backend))
+    @test absorbed.status == :inner
+    @test absorbed.t == [0.]
+    @test absorbed.u == [low]
+    @test absorbed.retcode == MarsTP.TP.ReturnCode.Success
     @test_throws ErrorException trace_forward_bounded(start;config=cfgB,fields=invalid,backend)
     failed = trace_forward_bounded(start;config=cfgB,fields=invalid,backend,throw_on_failure=false)[1]
     @test failed.status == :numerical_failure
