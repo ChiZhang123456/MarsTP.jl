@@ -87,6 +87,47 @@ function bounded_checks(backend)
     @test failed.retcode == MarsTP.TP.ReturnCode.Failure
     @test_throws ArgumentError trace_forward_bounded(states;fields,backend,config=ForwardTraceConfig())
     @test_throws ArgumentError trace_forward_bounded(states;fields,backend,config=cfg,inner_radius_m=inner-1)
+    # Oblique release points may round inside or outside a shell. Neither sign
+    # may turn an outward launch into absorption or let an inward one penetrate.
+    zero_mesh = MHDFields(collect(range(Rm+100e3,outer;length=8)),th,ph,E,copy(E),:total,"oblique_shell")
+    # Outer tangency is an immediate exit for either segment direction.
+    # Inner tangency moves into the valid domain; a stationary outer point stays.
+    for sign in (-1.,1.)
+        a=SA[outer,0.,0.]
+        @test MarsTP._backtrace_crossing(a,a+SA[0.,sign*10.,0.],inner,outer)==(0.,4)
+        tangent=only(trace_forward_bounded([SA[outer,0.,0.,0.,sign*1000.,0.]];
+            config=cfgB,fields=zero_mesh,backend))
+        @test tangent.status==:outer
+        @test tangent.t==[0.]
+        @test length(tangent.u)==1
+        inner_tangent=only(trace_forward_bounded([SA[inner,0.,0.,0.,sign*1000.,0.]];
+            config=cfgB,fields=zero_mesh,backend))
+        @test inner_tangent.status==:time_limit
+        @test all(>(0),diff(inner_tangent.t))
+    end
+    stationary=only(trace_forward_bounded([SA[outer,0.,0.,0.,0.,0.]];
+        config=cfgB,fields=zero_mesh,backend))
+    @test stationary.status==:time_limit
+    @test MarsTP._backtrace_crossing(SA[outer,0.,0.],SA[outer,0.,0.],inner,outer)==(1.,1)
+    direction = normalize(SA[0.3,0.4,0.5])
+    for height in (200.,400.,600.,800.)
+        boundary = Rm+height*1e3
+        starts = [vcat((boundary+offset)*direction,speed*direction)
+            for offset in (-8eps(boundary),0.,8eps(boundary)), speed in (-1000.,1000.)]
+        starts = vec(permutedims(starts))
+        cases = trace_forward_bounded(starts;config=cfgB,fields=zero_mesh,backend,
+            inner_radius_m=boundary,save_every=1)
+        for (start,sol) in zip(starts,cases)
+            if dot(start[1:3],start[4:6]) < 0
+                @test sol.status == :inner
+                @test sol.t == [0.]
+            else
+                @test sol.status == :time_limit
+                @test last(sol.t) ≈ 1.
+            end
+            @test all(u -> norm(u[1:3]) >= boundary-1e-6,sol.u)
+        end
+    end
 end
 
 function bounded_work_checks(backend)

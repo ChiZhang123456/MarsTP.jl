@@ -9,7 +9,13 @@ using KernelAbstractions: @kernel, @index
     v = SVector(initial[i,4], initial[i,5], initial[i,6])
     t = t0
     count = 1
-    flag = norm(x) < inner ? 2 : norm(x) > outer ? 4 : 1
+    radius = norm(x)
+    tolerance = 64eps(max(inner,outer))
+    radial_velocity = dot(x,v)
+    # A reconstructed shell point can lie a few ulps on either side. Classify
+    # its physical direction instead of absorbing an outward launch by roundoff.
+    flag = radius < inner-tolerance || (radius <= inner+tolerance && radial_velocity < 0) ? 2 :
+           radius > outer+tolerance || (radius >= outer-tolerance && radial_velocity > 0) ? 4 : 1
     totals = SVector(0.,0.,0.)
     positive = totals
     negative = totals
@@ -41,6 +47,10 @@ using KernelAbstractions: @kernel, @index
         end
         xn = x + fraction*(trial-x)
         tn = t0 + (step-1+fraction)*dt
+        if event != 1 && tn <= t
+            flag = event
+            break
+        end
         # Evaluate on the covered side of the boundary only. Saved position is
         # the actual intersection; this guard is solely for floating point roundoff.
         query = event == 4 ? xn*((outer-1e-6)/norm(xn)) :

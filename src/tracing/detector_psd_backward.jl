@@ -38,12 +38,22 @@ function _backtrace_crossing(a, b, inner, outer)
     d = b-a
     A = dot(d,d)
     A == 0 && return (1.0, 1)
+    ra = norm(a)
+    tolerance = 64eps(max(inner,outer))
+    radial_drift = dot(a,d)
+    abs(ra-inner) <= tolerance && radial_drift < 0 && return (0.0,2)
+    # A nonzero tangent segment leaves the convex outer sphere immediately,
+    # even though its radial derivative at the initial endpoint is zero.
+    abs(ra-outer) <= tolerance && radial_drift >= 0 && return (0.0,4)
     best, status = 1.0, 1
     for (radius, flag) in ((inner,2), (outer,4))
-        B, C = 2dot(a,d), dot(a,a)-radius^2
+        # Avoid cancellation between two squared planetary-scale radii.
+        B, C = 2radial_drift, (ra-radius)*(ra+radius)
         disc = B^2-4A*C
         disc < 0 && continue
-        for fraction in ((-B-sqrt(disc))/(2A), (-B+sqrt(disc))/(2A))
+        q = -0.5*(B+copysign(sqrt(disc),B))
+        roots = q == 0 ? (-B/(2A),-B/(2A)) : (q/A,C/q)
+        for fraction in roots
             0 <= fraction <= best || continue
             slope = dot(a+fraction*d,d)
             ((flag == 2 && slope < 0) || (flag == 4 && slope > 0)) || continue
